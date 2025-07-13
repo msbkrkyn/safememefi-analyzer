@@ -8,10 +8,10 @@ import { getMint } from '@solana/spl-token';
 import * as buffer from 'buffer';
 (window as any).Buffer = buffer.Buffer;
 
-// Helius API Anahtarınız
+// Helius API Key
 const HELIUS_API_KEY = "1d4ccf68-d14c-4843-acc9-e3379ed0cbf3";
 const COMMISSION_WALLET = "Ad7fjLeykfgoSadqUx95dioNB8WiYa3YEwBUDhTEvJdj";
-const COMMISSION_RATE = 0.05; // %5
+const COMMISSION_RATE = 0.05; // 5%
 
 interface TokenMetadata {
   name: string;
@@ -83,8 +83,8 @@ function App() {
       const basicInfo = {
         supply: mintInfo.supply.toString(),
         decimals: mintInfo.decimals,
-        mintAuthority: mintInfo.mintAuthority ? mintInfo.mintAuthority.toBase58() : 'N/A',
-        freezeAuthority: mintInfo.freezeAuthority ? mintInfo.freezeAuthority.toBase58() : 'N/A',
+        mintAuthority: mintInfo.mintAuthority ? mintInfo.mintAuthority.toBase58() : 'Revoked',
+        freezeAuthority: mintInfo.freezeAuthority ? mintInfo.freezeAuthority.toBase58() : 'Revoked',
         isInitialized: mintInfo.isInitialized,
       };
 
@@ -108,7 +108,6 @@ function App() {
 
         if (!metadataResponse.ok) {
           console.error(`Failed to fetch asset metadata. Status: ${metadataResponse.status}`);
-          console.error(`Response: ${await metadataResponse.text()}`);
         } else {
           const assetData: any = await metadataResponse.json();
           tokenMetadata = assetData.result?.content?.metadata as TokenMetadata | undefined || null;
@@ -131,7 +130,7 @@ function App() {
       };
 
       const SOL_MINT_ADDRESS = new PublicKey('So11111111111111111111111111111111111111112');
-      const amountToBuySOL = 1.0; // 1 SOL alım
+      const amountToBuySOL = 1.0; // 1 SOL buy
       const amountInLamports = Math.round(amountToBuySOL * LAMPORTS_PER_SOL);
 
       // Test 1: Can we get a buy quote?
@@ -144,20 +143,20 @@ function App() {
         if (!buyQuoteResponse.ok) {
           const errorText = await buyQuoteResponse.text();
           honeypotResult.isHoneypot = true;
-          honeypotResult.details.push(`Failed to get BUY quote. Status: ${buyQuoteResponse.status}, Error: ${errorText}`);
+          honeypotResult.details.push(`❌ Failed to get BUY quote. Status: ${buyQuoteResponse.status}`);
         } else {
           const buyQuoteData = (await buyQuoteResponse.json()) as JupiterQuoteResponse;
           honeypotResult.buyQuote = buyQuoteData;
           if (!buyQuoteData.outAmount || parseFloat(buyQuoteData.outAmount) === 0) {
             honeypotResult.isHoneypot = true;
-            honeypotResult.details.push("BUY Quote returned zero tokens.");
+            honeypotResult.details.push("❌ BUY Quote returned zero tokens");
           } else {
-            honeypotResult.details.push("✅ BUY Quote successful.");
+            honeypotResult.details.push("✅ BUY Quote successful");
           }
         }
       } catch (e) {
         honeypotResult.isHoneypot = true;
-        honeypotResult.details.push(`Error getting BUY quote: ${e instanceof Error ? e.message : String(e)}`);
+        honeypotResult.details.push(`❌ Error getting BUY quote: ${e instanceof Error ? e.message : String(e)}`);
       }
 
       // Test 2: Can we get a sell quote?
@@ -174,23 +173,23 @@ function App() {
           if (!sellQuoteResponse.ok) {
             const errorText = await sellQuoteResponse.text();
             honeypotResult.isHoneypot = true;
-            honeypotResult.details.push(`Failed to get SELL quote. Status: ${sellQuoteResponse.status}, Error: ${errorText}`);
+            honeypotResult.details.push(`❌ Failed to get SELL quote. Status: ${sellQuoteResponse.status}`);
           } else {
             const sellQuoteData = (await sellQuoteResponse.json()) as JupiterQuoteResponse;
             honeypotResult.sellQuote = sellQuoteData;
             if (!sellQuoteData.outAmount || parseFloat(sellQuoteData.outAmount) === 0) {
               honeypotResult.isHoneypot = true;
-              honeypotResult.details.push("SELL Quote returned zero SOL.");
+              honeypotResult.details.push("❌ SELL Quote returned zero SOL");
             } else {
-              honeypotResult.details.push("✅ SELL Quote successful.");
+              honeypotResult.details.push("✅ SELL Quote successful");
             }
           }
         } catch (e) {
           honeypotResult.isHoneypot = true;
-          honeypotResult.details.push(`Error getting SELL quote: ${e instanceof Error ? e.message : String(e)}`);
+          honeypotResult.details.push(`❌ Error getting SELL quote: ${e instanceof Error ? e.message : String(e)}`);
         }
       } else if (!honeypotResult.isHoneypot) {
-        honeypotResult.details.push("Skipping SELL quote due to initial BUY quote failure or zero output.");
+        honeypotResult.details.push("⏭️ Skipping SELL quote due to initial BUY quote failure");
         honeypotResult.isHoneypot = true;
       }
 
@@ -211,11 +210,10 @@ function App() {
           });
 
           if (!buySwapResponse.ok) {
-            const errorText = await buySwapResponse.text();
             honeypotResult.isHoneypot = true;
-            honeypotResult.details.push(`Failed to create BUY transaction. Status: ${buySwapResponse.status}, Error: ${errorText}`);
+            honeypotResult.details.push(`❌ Failed to create BUY transaction`);
           } else {
-            honeypotResult.details.push("✅ BUY Transaction creation successful.");
+            honeypotResult.details.push("✅ BUY Transaction creation successful");
           }
 
           const sellSwapResponse = await fetch('https://quote-api.jup.ag/v6/swap', {
@@ -232,19 +230,15 @@ function App() {
           });
 
           if (!sellSwapResponse.ok) {
-            const errorText = await sellSwapResponse.text();
             honeypotResult.isHoneypot = true;
-            honeypotResult.details.push(`Failed to create SELL transaction. Status: ${sellSwapResponse.status}, Error: ${errorText}`);
+            honeypotResult.details.push(`❌ Failed to create SELL transaction`);
           } else {
-            honeypotResult.details.push("✅ SELL Transaction creation successful.");
+            honeypotResult.details.push("✅ SELL Transaction creation successful");
           }
         } catch (e) {
           honeypotResult.isHoneypot = true;
-          honeypotResult.details.push(`Error creating transaction: ${e instanceof Error ? e.message : String(e)}`);
+          honeypotResult.details.push(`❌ Error creating transaction: ${e instanceof Error ? e.message : String(e)}`);
         }
-      } else if (!honeypotResult.isHoneypot) {
-        honeypotResult.details.push("Skipping transaction creation due to prior quote failures.");
-        honeypotResult.isHoneypot = true;
       }
 
       // Test 4: Price Analysis
@@ -256,84 +250,77 @@ function App() {
 
         honeypotResult.priceAnalysis = { buyPricePerToken, sellPricePerToken, priceImpact };
 
-        honeypotResult.details.push(`Buy price per token: ${buyPricePerToken.toExponential(4)} SOL`);
-        honeypotResult.details.push(`Sell price per token: ${sellPricePerToken.toExponential(4)} SOL`);
-        honeypotResult.details.push(`Price impact: ${priceImpact.toFixed(2)}%`);
-
         if (priceImpact > 50) {
           honeypotResult.isHoneypot = true;
-          honeypotResult.details.push(`⚠️ Warning: High price impact (${priceImpact.toFixed(2)}%)`);
+          honeypotResult.details.push(`🚨 High price impact: ${priceImpact.toFixed(2)}%`);
+        } else if (priceImpact > 10) {
+          honeypotResult.details.push(`⚠️ Moderate price impact: ${priceImpact.toFixed(2)}%`);
         } else {
-          honeypotResult.details.push(`✅ Price impact acceptable (${priceImpact.toFixed(2)}%)`);
+          honeypotResult.details.push(`✅ Low price impact: ${priceImpact.toFixed(2)}%`);
         }
-      } else if (!honeypotResult.isHoneypot) {
-          honeypotResult.details.push("Skipping price analysis due to invalid quotes.");
-          honeypotResult.isHoneypot = true;
       }
 
       if (!honeypotResult.isHoneypot) {
-          honeypotResult.details.push("Verdict: Token appears to be tradeable (NOT a honeypot)");
+          honeypotResult.details.push("🎉 Token appears to be legitimate");
       } else {
-          honeypotResult.details.push("Verdict: Likely Honeypot or an issue occurred during check.");
+          honeypotResult.details.push("🚨 Token flagged as potential HONEYPOT");
       }
 
-      // Test 5: Token yaşı ve likidite analizi
+      // Test 5: Risk Analysis
       let riskScore = 0;
       let riskDetails = [] as string[];
 
-      // Token yaşı kontrolü
+      // Account info check
       try {
         const accountInfo = await connection.getAccountInfo(mintPublicKey);
         if (accountInfo) {
-          riskDetails.push("🕒 Token hesap bilgisi alındı");
+          riskDetails.push("✅ Token account verified");
         }
       } catch (e) {
         riskScore += 20;
-        riskDetails.push("❌ Token hesap bilgisi alınamadı");
+        riskDetails.push("❌ Could not verify token account");
       }
 
-      // Likidite kontrolü
+      // Liquidity check
       if (honeypotResult.buyQuote && honeypotResult.sellQuote) {
         const buyAmount = parseFloat(honeypotResult.buyQuote.outAmount);
         
         if (buyAmount > 1000000) {
-          riskDetails.push("✅ Yüksek likidite tespit edildi");
+          riskDetails.push("✅ High liquidity detected");
         } else if (buyAmount > 100000) {
           riskScore += 10;
-          riskDetails.push("⚠️ Orta seviye likidite");
+          riskDetails.push("⚠️ Medium liquidity");
         } else {
           riskScore += 30;
-          riskDetails.push("🚨 Düşük likidite - RİSKLİ!");
+          riskDetails.push("🚨 Low liquidity - HIGH RISK!");
         }
       }
 
-      // Mint Authority ve Freeze Authority kontrolü
-      if (basicInfo.mintAuthority !== 'N/A') {
+      // Authority checks
+      if (basicInfo.mintAuthority !== 'Revoked') {
         riskScore += 25;
-        riskDetails.push("⚠️ Mint yetkisi aktif - Yeni token basılabilir");
+        riskDetails.push("⚠️ Mint authority active - New tokens can be minted");
       } else {
-        riskDetails.push("✅ Mint yetkisi kapalı - Güvenli");
+        riskDetails.push("✅ Mint authority revoked - Safe");
       }
 
-      if (basicInfo.freezeAuthority !== 'N/A') {
+      if (basicInfo.freezeAuthority !== 'Revoked') {
         riskScore += 15;
-        riskDetails.push("⚠️ Freeze yetkisi aktif - Hesaplar dondurulabilir");
+        riskDetails.push("⚠️ Freeze authority active - Accounts can be frozen");
       } else {
-        riskDetails.push("✅ Freeze yetkisi yok - Güvenli");
+        riskDetails.push("✅ Freeze authority revoked - Safe");
       }
 
-      // Risk skoruna göre genel değerlendirme
-      let riskLevel = 'Düşük';
+      // Risk level calculation
+      let riskLevel = 'Low';
       if (riskScore > 60) {
-        riskLevel = 'Çok Yüksek';
+        riskLevel = 'Critical';
         honeypotResult.isHoneypot = true;
       } else if (riskScore > 40) {
-        riskLevel = 'Yüksek';
+        riskLevel = 'High';
       } else if (riskScore > 20) {
-        riskLevel = 'Orta';
+        riskLevel = 'Medium';
       }
-
-      riskDetails.push(`📊 Genel Risk Seviyesi: ${riskLevel} (${riskScore}/100)`);
 
       setResults({
         basicInfo,
@@ -347,7 +334,7 @@ function App() {
 
     } catch (e) {
       console.error("Analysis error:", e);
-      setError(`An error occurred during analysis: ${e instanceof Error ? e.message : String(e)}`);
+      setError(`Analysis failed: ${e instanceof Error ? e.message : String(e)}`);
       setResults(null);
     } finally {
       setLoading(false);
@@ -361,7 +348,6 @@ function App() {
     try {
       const connection = new Connection(`https://rpc.helius.xyz/?api-key=${HELIUS_API_KEY}`);
       
-      // 1. Komisyon gönder
       const commissionAmount = Math.round(1 * LAMPORTS_PER_SOL * COMMISSION_RATE);
       const commissionTx = new Transaction().add(
         SystemProgram.transfer({
@@ -372,9 +358,7 @@ function App() {
       );
       
       const commissionTxid = await sendTransaction(commissionTx, connection);
-      console.log('Commission sent:', commissionTxid);
       
-      // 2. Swap transaction oluştur
       const swapResponse = await fetch('https://quote-api.jup.ag/v6/swap', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -393,18 +377,15 @@ function App() {
       }
 
       const { swapTransaction } = await swapResponse.json();
-      
-      // 3. Swap transaction'ı gönder
       const swapTransactionBuf = Buffer.from(swapTransaction, 'base64');
       const transaction = VersionedTransaction.deserialize(swapTransactionBuf);
       
       const txid = await sendTransaction(transaction, connection);
       
-      console.log('Swap transaction sent:', txid);
-      setError(`✅ Buy successful! Commission: ${commissionTxid.slice(0,8)}... Swap: ${txid.slice(0,8)}...`);
+      setError(`✅ Purchase successful! TX: ${txid.slice(0,8)}...`);
       
     } catch (e) {
-      setError(`Buy error: ${e instanceof Error ? e.message : String(e)}`);
+      setError(`Purchase failed: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setLoading(false);
     }
@@ -417,7 +398,6 @@ function App() {
     try {
       const connection = new Connection(`https://rpc.helius.xyz/?api-key=${HELIUS_API_KEY}`);
       
-      // 1. Swap transaction oluştur ve gönder
       const swapResponse = await fetch('https://quote-api.jup.ag/v6/swap', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -436,16 +416,12 @@ function App() {
       }
 
       const { swapTransaction } = await swapResponse.json();
-      
       const swapTransactionBuf = Buffer.from(swapTransaction, 'base64');
       const transaction = VersionedTransaction.deserialize(swapTransactionBuf);
       
       const txid = await sendTransaction(transaction, connection);
-      console.log('Sell transaction sent:', txid);
       
-      // 2. Satış sonrası komisyon gönder
       const sellCommissionAmount = Math.round(parseFloat(results.honeypotResult.sellQuote.outAmount) * COMMISSION_RATE);
-      
       const commissionTx = new Transaction().add(
         SystemProgram.transfer({
           fromPubkey: publicKey,
@@ -455,236 +431,367 @@ function App() {
       );
       
       const commissionTxid = await sendTransaction(commissionTx, connection);
-      console.log('Sell commission sent:', commissionTxid);
-      
-      setError(`✅ Sell successful! Swap: ${txid.slice(0,8)}... Commission: ${commissionTxid.slice(0,8)}...`);
+      setError(`✅ Sale successful! TX: ${txid.slice(0,8)}...`);
       
     } catch (e) {
-      setError(`Sell error: ${e instanceof Error ? e.message : String(e)}`);
+      setError(`Sale failed: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-lg">
-      <h1 className="text-3xl font-bold text-center text-gray-800 mb-2">SafeMemeFi Token Analyzer</h1>
-      <p className="text-center text-gray-600 mb-6">Analyze Solana tokens for potential honeypot characteristics - Protect yourself from pump.fun scams!</p>
-
-      {/* Wallet Connection */}
-      <div className="flex justify-center mb-6">
-        <WalletMultiButton />
-      </div>
-
-      <div className="flex gap-3 mb-6">
-        <input
-          type="text"
-          value={tokenAddress}
-          onChange={(e) => setTokenAddress(e.target.value)}
-          placeholder="Enter Token Address (e.g., DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263)"
-          className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        />
-        <button
-          onClick={handleAnalyze}
-          disabled={loading || !tokenAddress || !connected}
-          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {loading ? 'Analyzing...' : 'Analyze Token'}
-        </button>
-      </div>
-
-      {/* Pump.fun Info */}
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-        <h3 className="font-semibold text-yellow-800 mb-2">🚨 Pump.fun Protection</h3>
-        <p className="text-sm text-yellow-700">
-          Before buying any meme token from pump.fun, analyze it here first! Many pump.fun tokens are honeypots or have liquidity issues. Our analyzer checks for common scam patterns.
-        </p>
-      </div>
-
-      {!connected && (
-        <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4">
-          <strong>Warning:</strong> Please connect your wallet to analyze tokens.
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
+      {/* Header */}
+      <div className="bg-black/20 backdrop-blur-lg border-b border-purple-500/20">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-blue-500 rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-xl">S</span>
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-white">SafeMemeFi</h1>
+                <p className="text-purple-300 text-sm">Honeypot Protection</p>
+              </div>
+            </div>
+            <WalletMultiButton />
+          </div>
         </div>
-      )}
+      </div>
 
-      {error && (
-        <div className={`border px-4 py-3 rounded mb-4 ${
-          error.includes('✅') ? 'bg-green-100 border-green-400 text-green-700' : 'bg-red-100 border-red-400 text-red-700'
-        }`}>
-          <strong>{error.includes('✅') ? 'Success:' : 'Error:'}</strong> {error}
-        </div>
-      )}
-
-      {results && (
-        <div className="border-t border-gray-200 pt-6 mt-6">
-          <h2 className="text-2xl font-semibold text-blue-600 mb-4">Analysis Results for {tokenAddress}</h2>
-          <p className="text-sm text-gray-600 mb-6"><strong>Connected Wallet:</strong> {results.walletPublicKey}</p>
-
-          {/* Risk Score Display */}
-          <div className={`p-4 rounded-lg mb-6 ${
-            results.riskScore > 60 ? 'bg-red-100 border border-red-300' :
-            results.riskScore > 40 ? 'bg-orange-100 border border-orange-300' :
-            results.riskScore > 20 ? 'bg-yellow-100 border border-yellow-300' :
-            'bg-green-100 border border-green-300'
-          }`}>
-            <h3 className={`font-semibold mb-2 ${
-              results.riskScore > 60 ? 'text-red-800' :
-              results.riskScore > 40 ? 'text-orange-800' :
-              results.riskScore > 20 ? 'text-yellow-800' :
-              'text-green-800'
-            }`}>
-              🎯 Risk Assessment: {results.riskLevel} ({results.riskScore}/100)
-            </h3>
-            <div className="w-full bg-gray-200 rounded-full h-3">
-              <div 
-                className={`h-3 rounded-full ${
-                  results.riskScore > 60 ? 'bg-red-500' :
-                  results.riskScore > 40 ? 'bg-orange-500' :
-                  results.riskScore > 20 ? 'bg-yellow-500' :
-                  'bg-green-500'
-                }`}
-                style={{ width: `${Math.min(results.riskScore, 100)}%` }}
-              ></div>
+      <div className="max-w-6xl mx-auto px-6 py-8">
+        {/* Hero Section */}
+        <div className="text-center mb-12">
+          <h2 className="text-4xl md:text-6xl font-bold text-white mb-4">
+            Protect Your
+            <span className="bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent"> Investments</span>
+          </h2>
+          <p className="text-xl text-gray-300 mb-8 max-w-3xl mx-auto">
+            Advanced token analysis to detect honeypots, rug pulls, and scams before you trade. 
+            Stay safe from pump.fun traps with our AI-powered security scanner.
+          </p>
+          
+          {/* Warning Banner */}
+          <div className="bg-gradient-to-r from-red-900/30 to-orange-900/30 border border-red-500/30 rounded-xl p-6 mb-8">
+            <div className="flex items-center justify-center space-x-3">
+              <span className="text-3xl">🚨</span>
+              <div className="text-left">
+                <h3 className="text-xl font-semibold text-red-300">Pump.fun Warning</h3>
+                <p className="text-red-200">
+                  Over 90% of pump.fun tokens are scams. Always analyze before buying!
+                </p>
+              </div>
             </div>
           </div>
+        </div>
 
-          {/* Commission Info */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-            <h3 className="font-semibold text-blue-800 mb-2">💰 Trading Fees</h3>
-            <p className="text-sm text-blue-700">
-              • Buy: 1 SOL + 5% commission (0.05 SOL) = 1.05 SOL total<br/>
-              • Sell: 5% commission from received SOL amount<br/>
-              • Commission goes to: {COMMISSION_WALLET.slice(0,8)}...{COMMISSION_WALLET.slice(-8)}
+        {/* Analysis Form */}
+        <div className="bg-black/40 backdrop-blur-lg rounded-2xl border border-purple-500/20 p-8 mb-8">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1">
+              <input
+                type="text"
+                value={tokenAddress}
+                onChange={(e) => setTokenAddress(e.target.value)}
+                placeholder="Enter token address (e.g., DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263)"
+                className="w-full px-6 py-4 bg-gray-800/50 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition-all"
+              />
+            </div>
+            <button
+              onClick={handleAnalyze}
+              disabled={loading || !tokenAddress || !connected}
+              className="px-8 py-4 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:from-gray-600 disabled:to-gray-600 text-white font-semibold rounded-xl transition-all transform hover:scale-105 disabled:scale-100 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <div className="flex items-center space-x-2">
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Analyzing...</span>
+                </div>
+              ) : (
+                'Analyze Token'
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Connection Warning */}
+        {!connected && (
+          <div className="bg-yellow-900/30 border border-yellow-500/30 rounded-xl p-6 mb-8">
+            <div className="flex items-center space-x-3">
+              <span className="text-2xl">⚠️</span>
+              <div>
+                <h3 className="text-lg font-semibold text-yellow-300">Wallet Required</h3>
+                <p className="text-yellow-200">Connect your wallet to analyze tokens and trade safely.</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Error Message */}
+        {error && (
+          <div className={`border rounded-xl p-6 mb-8 ${
+            error.includes('✅') 
+              ? 'bg-green-900/30 border-green-500/30' 
+              : 'bg-red-900/30 border-red-500/30'
+          }`}>
+            <p className={error.includes('✅') ? 'text-green-200' : 'text-red-200'}>
+              {error}
             </p>
           </div>
+        )}
 
-          {/* Trading Buttons */}
-          {!results.honeypotResult.isHoneypot && results.riskScore < 60 && (
-            <div className="flex gap-4 mb-6 justify-center">
-              <button
-                onClick={handleBuyToken}
-                disabled={loading}
-                className="px-8 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 font-semibold"
-              >
-                🚀 Buy Token (1 SOL + 5% fee)
-              </button>
-              <button
-                onClick={handleSellToken}
-                disabled={loading}
-                className="px-8 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 font-semibold"
-              >
-                💰 Sell Token (5% fee)
-              </button>
-            </div>
-          )}
-
-          {(results.honeypotResult.isHoneypot || results.riskScore >= 60) && (
-            <div className="bg-red-100 border border-red-300 rounded-lg p-4 mb-6 text-center">
-              <h3 className="font-semibold text-red-800 mb-2">⚠️ TRADING DISABLED</h3>
-              <p className="text-sm text-red-700">
-                This token has been flagged as high risk or potential honeypot. Trading is disabled for your protection.
-              </p>
-            </div>
-          )}
-
-          <div className="grid md:grid-cols-2 gap-6">
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <h3 className="text-lg font-semibold text-gray-700 mb-3">Basic Token Information</h3>
-              <div className="space-y-2 text-sm">
-                <p><strong>Total Supply:</strong> {results.basicInfo.supply}</p>
-                <p><strong>Decimals:</strong> {results.basicInfo.decimals}</p>
-                <p><strong>Mint Authority:</strong> {results.basicInfo.mintAuthority}</p>
-                <p><strong>Freeze Authority:</strong> {results.basicInfo.freezeAuthority}</p>
-                <p><strong>Is Initialized:</strong> {results.basicInfo.isInitialized ? 'true' : 'false'}</p>
+        {/* Results */}
+        {results && (
+          <div className="space-y-8">
+            {/* Risk Assessment */}
+            <div className="bg-black/40 backdrop-blur-lg rounded-2xl border border-purple-500/20 p-8">
+              <h3 className="text-2xl font-bold text-white mb-6 flex items-center">
+                <span className="mr-3">🎯</span>
+                Risk Assessment
+              </h3>
+              
+              <div className={`p-6 rounded-xl border-2 ${
+                results.riskScore > 60 ? 'bg-red-900/30 border-red-500' :
+                results.riskScore > 40 ? 'bg-orange-900/30 border-orange-500' :
+                results.riskScore > 20 ? 'bg-yellow-900/30 border-yellow-500' :
+                'bg-green-900/30 border-green-500'
+              }`}>
+                <div className="flex items-center justify-between mb-4">
+                  <span className={`text-2xl font-bold ${
+                    results.riskScore > 60 ? 'text-red-300' :
+                    results.riskScore > 40 ? 'text-orange-300' :
+                    results.riskScore > 20 ? 'text-yellow-300' :
+                    'text-green-300'
+                  }`}>
+                    {results.riskLevel} Risk
+                  </span>
+                  <span className={`text-xl font-semibold ${
+                    results.riskScore > 60 ? 'text-red-300' :
+                    results.riskScore > 40 ? 'text-orange-300' :
+                    results.riskScore > 20 ? 'text-yellow-300' :
+                    'text-green-300'
+                  }`}>
+                    {results.riskScore}/100
+                  </span>
+                </div>
+                
+                <div className="w-full bg-gray-700 rounded-full h-4 mb-4">
+                  <div 
+                    className={`h-4 rounded-full transition-all duration-1000 ${
+                      results.riskScore > 60 ? 'bg-gradient-to-r from-red-600 to-red-400' :
+                      results.riskScore > 40 ? 'bg-gradient-to-r from-orange-600 to-orange-400' :
+                      results.riskScore > 20 ? 'bg-gradient-to-r from-yellow-600 to-yellow-400' :
+                      'bg-gradient-to-r from-green-600 to-green-400'
+                    }`}
+                    style={{ width: `${Math.min(results.riskScore, 100)}%` }}
+                  ></div>
+                </div>
               </div>
             </div>
 
-            {results.tokenMetadata && (
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold text-gray-700 mb-3">Token Metadata</h3>
-                <div className="space-y-2 text-sm">
-                  <p><strong>Name:</strong> {results.tokenMetadata.name}</p>
-                  <p><strong>Symbol:</strong> {results.tokenMetadata.symbol}</p>
-                  {results.tokenMetadata.image && (
-                    <div className="mt-3">
-                      <p><strong>Logo:</strong></p>
-                      <img 
-                        src={results.tokenMetadata.image} 
-                        alt={results.tokenMetadata.name} 
-                        className="w-16 h-16 rounded-lg object-cover mt-2"
-                      />
+            {/* Trading Section */}
+            {!results.honeypotResult.isHoneypot && results.riskScore < 60 ? (
+              <div className="bg-black/40 backdrop-blur-lg rounded-2xl border border-green-500/20 p-8">
+                <h3 className="text-2xl font-bold text-white mb-6 flex items-center">
+                  <span className="mr-3">💰</span>
+                  Safe to Trade
+                </h3>
+                
+                <div className="grid md:grid-cols-2 gap-6 mb-8">
+                  <div className="bg-green-900/20 border border-green-500/30 rounded-xl p-6">
+                    <h4 className="text-lg font-semibold text-green-300 mb-3">Trading Fees</h4>
+                    <div className="space-y-2 text-green-200 text-sm">
+                      <p>• Buy: 1 SOL + 5% commission (0.05 SOL)</p>
+                      <p>• Sell: 5% commission from received SOL</p>
+                      <p>• Commission: {COMMISSION_WALLET.slice(0,8)}...{COMMISSION_WALLET.slice(-8)}</p>
                     </div>
-                  )}
+                  </div>
+                  
+                  <div className="bg-blue-900/20 border border-blue-500/30 rounded-xl p-6">
+                    <h4 className="text-lg font-semibold text-blue-300 mb-3">Price Analysis</h4>
+                    {results.honeypotResult.priceAnalysis && (
+                      <div className="space-y-2 text-blue-200 text-sm">
+                        <p>Buy: {results.honeypotResult.priceAnalysis.buyPricePerToken.toExponential(4)} SOL</p>
+                        <p>Sell: {results.honeypotResult.priceAnalysis.sellPricePerToken.toExponential(4)} SOL</p>
+                        <p>Impact: {results.honeypotResult.priceAnalysis.priceImpact.toFixed(2)}%</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                  <button
+                    onClick={handleBuyToken}
+                    disabled={loading}
+                    className="px-8 py-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:from-gray-600 disabled:to-gray-600 text-white font-semibold rounded-xl transition-all transform hover:scale-105 disabled:scale-100 disabled:cursor-not-allowed"
+                  >
+                    🚀 Buy Token (1 SOL + 5% fee)
+                  </button>
+                  <button
+                    onClick={handleSellToken}
+                    disabled={loading}
+                    className="px-8 py-4 bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 disabled:from-gray-600 disabled:to-gray-600 text-white font-semibold rounded-xl transition-all transform hover:scale-105 disabled:scale-100 disabled:cursor-not-allowed"
+                  >
+                    💰 Sell Token (5% fee)
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-black/40 backdrop-blur-lg rounded-2xl border border-red-500/20 p-8">
+                <h3 className="text-2xl font-bold text-white mb-6 flex items-center">
+                  <span className="mr-3">🚨</span>
+                  Trading Disabled
+                </h3>
+                <div className="bg-red-900/30 border border-red-500/30 rounded-xl p-6 text-center">
+                  <p className="text-red-200 text-lg mb-2">High Risk Token Detected</p>
+                  <p className="text-red-300 text-sm">
+                    This token has been flagged as potentially dangerous. Trading is disabled for your protection.
+                  </p>
                 </div>
               </div>
             )}
-          </div>
 
-          {/* Risk Analysis */}
-          {results.riskDetails && results.riskDetails.length > 0 && (
-            <div className="mt-6 bg-gray-50 p-4 rounded-lg">
-              <h3 className="text-lg font-semibold text-gray-700 mb-3">🔍 Risk Analysis</h3>
-              <div className="space-y-2">
+            {/* Token Information */}
+            <div className="grid md:grid-cols-2 gap-8">
+              {/* Basic Info */}
+              <div className="bg-black/40 backdrop-blur-lg rounded-2xl border border-purple-500/20 p-8">
+                <h3 className="text-2xl font-bold text-white mb-6 flex items-center">
+                  <span className="mr-3">📊</span>
+                  Token Information
+                </h3>
+                <div className="space-y-4">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Supply:</span>
+                    <span className="text-white font-mono">{parseInt(results.basicInfo.supply).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Decimals:</span>
+                    <span className="text-white">{results.basicInfo.decimals}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Mint Authority:</span>
+                    <span className={results.basicInfo.mintAuthority === 'Revoked' ? 'text-green-400' : 'text-red-400'}>
+                      {results.basicInfo.mintAuthority === 'Revoked' ? '✅ Revoked' : '⚠️ Active'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Freeze Authority:</span>
+                    <span className={results.basicInfo.freezeAuthority === 'Revoked' ? 'text-green-400' : 'text-red-400'}>
+                      {results.basicInfo.freezeAuthority === 'Revoked' ? '✅ Revoked' : '⚠️ Active'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Token Metadata */}
+              {results.tokenMetadata && (
+                <div className="bg-black/40 backdrop-blur-lg rounded-2xl border border-purple-500/20 p-8">
+                  <h3 className="text-2xl font-bold text-white mb-6 flex items-center">
+                    <span className="mr-3">🏷️</span>
+                    Token Metadata
+                  </h3>
+                  <div className="space-y-4">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Name:</span>
+                      <span className="text-white font-semibold">{results.tokenMetadata.name}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Symbol:</span>
+                      <span className="text-white font-mono">{results.tokenMetadata.symbol}</span>
+                    </div>
+                    {results.tokenMetadata.image && (
+                      <div className="flex flex-col items-center mt-6">
+                        <span className="text-gray-400 mb-3">Logo:</span>
+                        <img 
+                          src={results.tokenMetadata.image} 
+                          alt={results.tokenMetadata.name} 
+                          className="w-20 h-20 rounded-xl object-cover border border-purple-500/30"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Risk Analysis Details */}
+            <div className="bg-black/40 backdrop-blur-lg rounded-2xl border border-purple-500/20 p-8">
+              <h3 className="text-2xl font-bold text-white mb-6 flex items-center">
+                <span className="mr-3">🔍</span>
+                Risk Analysis
+              </h3>
+              <div className="grid gap-3">
                 {results.riskDetails.map((detail: string, index: number) => (
-                  <p 
+                  <div 
                     key={index} 
-                    className={`text-sm ${
-                      detail.startsWith('✅') ? 'text-green-600' : 
-                      detail.startsWith('⚠️') ? 'text-yellow-600' : 
-                      detail.startsWith('🚨') ? 'text-red-600' :
-                      detail.startsWith('📊') ? 'text-blue-600 font-semibold' :
-                      'text-gray-700'
+                    className={`p-4 rounded-lg border ${
+                      detail.startsWith('✅') ? 'bg-green-900/20 border-green-500/30 text-green-200' : 
+                      detail.startsWith('⚠️') ? 'bg-yellow-900/20 border-yellow-500/30 text-yellow-200' : 
+                      detail.startsWith('🚨') ? 'bg-red-900/20 border-red-500/30 text-red-200' :
+                      'bg-gray-900/20 border-gray-500/30 text-gray-200'
                     }`}
                   >
                     {detail}
-                  </p>
+                  </div>
                 ))}
               </div>
             </div>
-          )}
 
-          <div className="mt-6 bg-gray-50 p-4 rounded-lg">
-            <h3 className="text-lg font-semibold text-gray-700 mb-3">🕵️ Honeypot Check Results</h3>
-            <div className="space-y-2">
-              {results.honeypotResult.details.map((detail: string, index: number) => (
-                <p 
-                  key={index} 
-                  className={`text-sm ${
-                    detail.startsWith('✅') ? 'text-green-600' : 
-                    detail.startsWith('⚠️') ? 'text-yellow-600' : 
-                    'text-red-600'
-                  }`}
-                >
-                  {detail}
-                </p>
-              ))}
-            </div>
-            
-            {results.honeypotResult.priceAnalysis && (
-              <div className="mt-4 p-3 border border-gray-300 rounded-lg bg-white">
-                <h4 className="font-semibold text-gray-700 mb-2">💰 Price Analysis:</h4>
-                <div className="text-sm space-y-1">
-                  <p>Buy price per token: {results.honeypotResult.priceAnalysis.buyPricePerToken.toExponential(4)} SOL</p>
-                  <p>Sell price per token: {results.honeypotResult.priceAnalysis.sellPricePerToken.toExponential(4)} SOL</p>
-                  <p>Price impact: {results.honeypotResult.priceAnalysis.priceImpact.toFixed(2)}%</p>
-                </div>
+            {/* Honeypot Check Results */}
+            <div className="bg-black/40 backdrop-blur-lg rounded-2xl border border-purple-500/20 p-8">
+              <h3 className="text-2xl font-bold text-white mb-6 flex items-center">
+                <span className="mr-3">🕵️</span>
+                Honeypot Detection
+              </h3>
+              <div className="grid gap-3">
+                {results.honeypotResult.details.map((detail: string, index: number) => (
+                  <div 
+                    key={index} 
+                    className={`p-4 rounded-lg border ${
+                      detail.startsWith('✅') || detail.startsWith('🎉') ? 'bg-green-900/20 border-green-500/30 text-green-200' : 
+                      detail.startsWith('⚠️') ? 'bg-yellow-900/20 border-yellow-500/30 text-yellow-200' : 
+                      detail.startsWith('❌') || detail.startsWith('🚨') ? 'bg-red-900/20 border-red-500/30 text-red-200' :
+                      'bg-gray-900/20 border-gray-500/30 text-gray-200'
+                    }`}
+                  >
+                    {detail}
+                  </div>
+                ))}
               </div>
-            )}
-          </div>
+            </div>
 
-          <div className={`mt-6 p-4 rounded-lg text-center font-semibold ${
-            results.honeypotResult.isHoneypot || results.riskScore >= 60
-              ? 'bg-red-100 text-red-800 border border-red-300' 
-              : 'bg-green-100 text-green-800 border border-green-300'
-          }`}>
-            {results.honeypotResult.isHoneypot || results.riskScore >= 60
-              ? '🚨 SECURITY ALERT: This token is HIGH RISK or potential HONEYPOT! 🚨' 
-              : '✅ SECURITY CHECK: Token appears to be legitimate for trading'
-            }
-            <p className="text-sm mt-2 font-normal">💡 Always do your own research before investing!</p>
+            {/* Final Verdict */}
+            <div className={`bg-black/40 backdrop-blur-lg rounded-2xl border-2 p-8 text-center ${
+              results.honeypotResult.isHoneypot || results.riskScore >= 60
+                ? 'border-red-500/50' 
+                : 'border-green-500/50'
+            }`}>
+              <div className={`text-4xl mb-4 ${
+                results.honeypotResult.isHoneypot || results.riskScore >= 60 ? 'text-red-400' : 'text-green-400'
+              }`}>
+                {results.honeypotResult.isHoneypot || results.riskScore >= 60 ? '🚨' : '✅'}
+              </div>
+              <h3 className={`text-2xl font-bold mb-2 ${
+                results.honeypotResult.isHoneypot || results.riskScore >= 60 ? 'text-red-300' : 'text-green-300'
+              }`}>
+                {results.honeypotResult.isHoneypot || results.riskScore >= 60
+                  ? 'SECURITY ALERT: High Risk Token' 
+                  : 'VERIFIED: Token Appears Safe'
+                }
+              </h3>
+              <p className="text-gray-300">
+                Always do your own research before investing in any cryptocurrency!
+              </p>
+            </div>
           </div>
+        )}
+
+        {/* Footer */}
+        <div className="mt-16 text-center text-gray-400">
+          <p>Built with ❤️ for the Solana community • Protect yourself from scams</p>
         </div>
-      )}
+      </div>
     </div>
   );
 }
