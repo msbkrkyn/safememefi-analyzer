@@ -417,10 +417,6 @@ function App() {
   };
 
   const handleAnalyze = async () => {
-    if (!connected || !publicKey) {
-      setError('Please connect your wallet first');
-      return;
-    }
 
     // Input validation
     if (!tokenAddress || tokenAddress.length < 32 || tokenAddress.length > 44) {
@@ -623,7 +619,7 @@ function App() {
         marketCap,
         currentPrice,
         socialLinks,
-        walletPublicKey: publicKey.toBase58(),
+       walletPublicKey: publicKey ? publicKey.toBase58() : 'Not connected',
       });
 
     } catch (e) {
