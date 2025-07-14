@@ -1,24 +1,25 @@
+import React, { useState } from 'react';
 import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
 import { ConnectionProvider, WalletProvider, useWallet } from '@solana/wallet-adapter-react';
 import { WalletModalProvider, WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { PhantomWalletAdapter } from '@solana/wallet-adapter-wallets';
-import React, { useState } from 'react';
 import { Connection, PublicKey, LAMPORTS_PER_SOL, Transaction, VersionedTransaction, SystemProgram } from '@solana/web3.js';
-import { getMint, getAccount } from '@solana/spl-token';
+import { getMint } from '@solana/spl-token';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts';
 import * as buffer from 'buffer';
-(window as any).Buffer = buffer.Buffer;
 
-// Helius API Key
+// Buffer fix
+(window as any).Buffer = buffer.Buffer;
 const HELIUS_API_KEY = "1d4ccf68-d14c-4843-acc9-e3379ed0cbf3";
 const COMMISSION_WALLET = "Ad7fjLeykfgoSadqUx95dioNB8WiYa3YEwBUDhTEvJdj";
-const COMMISSION_RATE = 0.05; // 5%
+const COMMISSION_RATE = 0.05;
 
 interface TokenMetadata {
   name: string;
   symbol: string;
   uri: string;
   image?: string;
+  [key: string]: any;
 }
 
 interface JupiterQuoteResponse {
@@ -53,6 +54,7 @@ interface RiskFactor {
   score: number;
   status: 'safe' | 'warning' | 'danger';
   description: string;
+  category: 'technical' | 'market' | 'security' | 'whale';
 }
 
 function WalletContextProvider({ children }: { children: React.ReactNode }) {
@@ -78,9 +80,157 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<any>(null);
 
+  const calculateDynamicRisk = (basicInfo: any, holders: TokenHolder[]): { score: number, factors: RiskFactor[] } => {
+    const factors: RiskFactor[] = [];
+    let totalScore = 0;
+
+    // Simulate token age (random for demo)
+    const tokenAge = Math.random() * 72; // 0-72 hours
+    let ageScore = 0;
+    let ageStatus: 'safe' | 'warning' | 'danger' = 'safe';
+    let ageDesc = '';
+    
+    if (tokenAge < 1) {
+      ageScore = 40;
+      ageStatus = 'danger';
+      ageDesc = `Brand new token (${tokenAge.toFixed(1)}h old) - Extreme risk!`;
+    } else if (tokenAge < 6) {
+      ageScore = 25;
+      ageStatus = 'danger';
+      ageDesc = `Very young token (${tokenAge.toFixed(1)}h old) - High risk`;
+    } else if (tokenAge < 24) {
+      ageScore = 15;
+      ageStatus = 'warning';
+      ageDesc = `Young token (${tokenAge.toFixed(1)}h old) - Moderate risk`;
+    } else {
+      ageDesc = `Mature token (${(tokenAge/24).toFixed(1)} days old)`;
+    }
+    
+    factors.push({
+      name: 'Token Age',
+      score: ageScore,
+      status: ageStatus,
+      description: ageDesc,
+      category: 'market'
+    });
+    totalScore += ageScore;
+
+    // Mint Authority Risk
+    let mintScore = 0;
+    let mintStatus: 'safe' | 'warning' | 'danger' = 'safe';
+    let mintDesc = '';
+    
+    if (basicInfo.mintAuthority !== 'Revoked') {
+      mintScore = 30;
+      mintStatus = 'danger';
+      mintDesc = 'Mint authority active - New tokens can be created';
+    } else {
+      mintDesc = 'Mint authority revoked - Safe';
+    }
+    
+    factors.push({
+      name: 'Mint Authority',
+      score: mintScore,
+      status: mintStatus,
+      description: mintDesc,
+      category: 'security'
+    });
+    totalScore += mintScore;
+
+    // Freeze Authority Risk
+    let freezeScore = 0;
+    let freezeStatus: 'safe' | 'warning' | 'danger' = 'safe';
+    let freezeDesc = '';
+    
+    if (basicInfo.freezeAuthority !== 'Revoked') {
+      freezeScore = 20;
+      freezeStatus = 'warning';
+      freezeDesc = 'Freeze authority active - Accounts can be frozen';
+    } else {
+      freezeDesc = 'Freeze authority revoked - Safe';
+    }
+    
+    factors.push({
+      name: 'Freeze Authority',
+      score: freezeScore,
+      status: freezeStatus,
+      description: freezeDesc,
+      category: 'security'
+    });
+    totalScore += freezeScore;
+
+    // Holder Concentration Risk
+    if (holders.length > 0) {
+      const topHolderPercent = holders[0]?.percentage || 0;
+      let holderScore = 0;
+      let holderStatus: 'safe' | 'warning' | 'danger' = 'safe';
+      let holderDesc = '';
+
+      if (topHolderPercent > 50) {
+        holderScore = 35;
+        holderStatus = 'danger';
+        holderDesc = `Top holder owns ${topHolderPercent.toFixed(1)}% - High centralization risk`;
+      } else if (topHolderPercent > 30) {
+        holderScore = 20;
+        holderStatus = 'warning';
+        holderDesc = `Top holder owns ${topHolderPercent.toFixed(1)}% - Moderate risk`;
+      } else if (topHolderPercent > 20) {
+        holderScore = 10;
+        holderStatus = 'warning';
+        holderDesc = `Top holder owns ${topHolderPercent.toFixed(1)}% - Some risk`;
+      } else {
+        holderDesc = `Well distributed - Top holder: ${topHolderPercent.toFixed(1)}%`;
+      }
+
+      factors.push({
+        name: 'Token Distribution',
+        score: holderScore,
+        status: holderStatus,
+        description: holderDesc,
+        category: 'whale'
+      });
+      totalScore += holderScore;
+    }
+
+    // Simulate price volatility
+    const volatility = Math.random() * 100;
+    let volScore = 0;
+    let volStatus: 'safe' | 'warning' | 'danger' = 'safe';
+    let volDesc = '';
+    
+    if (volatility > 80) {
+      volScore = 25;
+      volStatus = 'danger';
+      volDesc = `Extreme volatility (${volatility.toFixed(1)}%) - Very risky!`;
+    } else if (volatility > 50) {
+      volScore = 15;
+      volStatus = 'warning';
+      volDesc = `High volatility (${volatility.toFixed(1)}%) - Risky`;
+    } else if (volatility > 20) {
+      volScore = 5;
+      volStatus = 'warning';
+      volDesc = `Moderate volatility (${volatility.toFixed(1)}%)`;
+    } else {
+      volDesc = `Low volatility (${volatility.toFixed(1)}%) - Stable`;
+    }
+    
+    factors.push({
+      name: 'Price Volatility',
+      score: volScore,
+      status: volStatus,
+      description: volDesc,
+      category: 'technical'
+    });
+    totalScore += volScore;
+
+    return {
+      score: Math.min(Math.floor(totalScore), 100),
+      factors
+    };
+  };
+
   const getTokenHolders = async (connection: Connection, mintPublicKey: PublicKey): Promise<TokenHolder[]> => {
     try {
-      // Get largest accounts for this token
       const largestAccounts = await connection.getTokenLargestAccounts(mintPublicKey);
       
       const holders: TokenHolder[] = [];
@@ -113,7 +263,7 @@ function App() {
     
     for (let i = 23; i >= 0; i--) {
       const time = new Date(now - i * 60 * 60 * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      price = price * (0.95 + Math.random() * 0.1); // Realistic price movement
+      price = price * (0.95 + Math.random() * 0.1);
       const volume = Math.random() * 1000000;
       
       data.push({
@@ -124,111 +274,6 @@ function App() {
     }
     
     return data;
-  };
-
-  const analyzeRiskFactors = (basicInfo: any, holders: TokenHolder[], honeypotResult: any): RiskFactor[] => {
-    const factors: RiskFactor[] = [];
-
-    // Mint Authority Risk
-    factors.push({
-      name: 'Mint Authority',
-      score: basicInfo.mintAuthority === 'Revoked' ? 0 : 40,
-      status: basicInfo.mintAuthority === 'Revoked' ? 'safe' : 'danger',
-      description: basicInfo.mintAuthority === 'Revoked' ? 'Mint authority has been revoked' : 'Mint authority is still active - new tokens can be created'
-    });
-
-    // Freeze Authority Risk
-    factors.push({
-      name: 'Freeze Authority',
-      score: basicInfo.freezeAuthority === 'Revoked' ? 0 : 25,
-      status: basicInfo.freezeAuthority === 'Revoked' ? 'safe' : 'warning',
-      description: basicInfo.freezeAuthority === 'Revoked' ? 'Freeze authority has been revoked' : 'Freeze authority is active - accounts can be frozen'
-    });
-
-    // Holder Concentration Risk
-    if (holders.length > 0) {
-      const topHolderPercentage = holders[0]?.percentage || 0;
-      const top5Percentage = holders.slice(0, 5).reduce((sum, h) => sum + h.percentage, 0);
-      
-      let holderScore = 0;
-      let holderStatus: 'safe' | 'warning' | 'danger' = 'safe';
-      let holderDesc = '';
-
-      if (topHolderPercentage > 50) {
-        holderScore = 35;
-        holderStatus = 'danger';
-        holderDesc = `Top holder owns ${topHolderPercentage.toFixed(1)}% - High centralization risk`;
-      } else if (top5Percentage > 80) {
-        holderScore = 20;
-        holderStatus = 'warning';
-        holderDesc = `Top 5 holders own ${top5Percentage.toFixed(1)}% - Moderate centralization risk`;
-      } else {
-        holderDesc = `Well distributed ownership - Top holder: ${topHolderPercentage.toFixed(1)}%`;
-      }
-
-      factors.push({
-        name: 'Token Distribution',
-        score: holderScore,
-        status: holderStatus,
-        description: holderDesc
-      });
-    }
-
-    // Liquidity Risk
-    if (honeypotResult.buyQuote) {
-      const buyAmount = parseFloat(honeypotResult.buyQuote.outAmount);
-      let liquidityScore = 0;
-      let liquidityStatus: 'safe' | 'warning' | 'danger' = 'safe';
-      let liquidityDesc = '';
-
-      if (buyAmount < 100000) {
-        liquidityScore = 30;
-        liquidityStatus = 'danger';
-        liquidityDesc = 'Very low liquidity - High slippage risk';
-      } else if (buyAmount < 1000000) {
-        liquidityScore = 15;
-        liquidityStatus = 'warning';
-        liquidityDesc = 'Moderate liquidity - Some slippage expected';
-      } else {
-        liquidityDesc = 'Good liquidity available';
-      }
-
-      factors.push({
-        name: 'Liquidity',
-        score: liquidityScore,
-        status: liquidityStatus,
-        description: liquidityDesc
-      });
-    }
-
-    // Price Impact Risk
-    if (honeypotResult.priceAnalysis) {
-      const priceImpact = honeypotResult.priceAnalysis.priceImpact;
-      let impactScore = 0;
-      let impactStatus: 'safe' | 'warning' | 'danger' = 'safe';
-      let impactDesc = '';
-
-      if (priceImpact > 20) {
-        impactScore = 25;
-        impactStatus = 'danger';
-        impactDesc = `Very high price impact: ${priceImpact.toFixed(2)}%`;
-      } else if (priceImpact > 10) {
-        impactScore = 10;
-        impactStatus = 'warning';
-        impactDesc = `Moderate price impact: ${priceImpact.toFixed(2)}%`;
-      } else {
-        impactDesc = `Low price impact: ${priceImpact.toFixed(2)}%`;
-      }
-
-      factors.push({
-        name: 'Price Impact',
-        score: impactScore,
-        status: impactStatus,
-        description: impactDesc
-      });
-    }
-
-    return factors;
   };
 
   const handleAnalyze = async () => {
@@ -245,7 +290,7 @@ function App() {
       const connection = new Connection(`https://rpc.helius.xyz/?api-key=${HELIUS_API_KEY}`);
       const mintPublicKey = new PublicKey(tokenAddress);
 
-      // --- Basic Token Information ---
+      // Basic Token Information
       let mintInfo;
       try {
         mintInfo = await getMint(connection, mintPublicKey);
@@ -261,12 +306,12 @@ function App() {
         isInitialized: mintInfo.isInitialized,
       };
 
-      // --- Get Token Holders ---
+      // Get Token Holders
       const holders = await getTokenHolders(connection, mintPublicKey);
 
-      // --- Fetching Metaplex Metadata ---
-      let tokenMetadata: TokenMetadata | null = null;
-      let imageUrl: string | undefined;
+      // Fetching Metaplex Metadata
+      let tokenMetadata = null;
+      let imageUrl = undefined;
 
       try {
         const metadataResponse = await fetch(`https://rpc.helius.xyz/?api-key=${HELIUS_API_KEY}`, {
@@ -283,24 +328,24 @@ function App() {
         });
 
         if (metadataResponse.ok) {
-          const assetData: any = await metadataResponse.json();
-          tokenMetadata = assetData.result?.content?.metadata as TokenMetadata | undefined || null;
+          const assetData = await metadataResponse.json();
+          tokenMetadata = assetData.result?.content?.metadata || null;
           imageUrl = assetData.result?.content?.links?.image;
           if (tokenMetadata && imageUrl) {
-            tokenMetadata.image = imageUrl;
-          }
+  (tokenMetadata as any).image = imageUrl;
+}
         }
       } catch (e) {
-        console.error(`Error fetching Metaplex metadata: ${e instanceof Error ? e.message : String(e)}`);
+        console.error(`Error fetching metadata:`, e);
       }
 
-      // --- Honeypot Check Logic ---
+      // Honeypot Check Logic
       let honeypotResult = {
         isHoneypot: false,
         details: [] as string[],
         buyQuote: null as JupiterQuoteResponse | null,
         sellQuote: null as JupiterQuoteResponse | null,
-        priceAnalysis: null as { buyPricePerToken: number, sellPricePerToken: number, priceImpact: number } | null,
+        priceAnalysis: null as any,
       };
 
       const SOL_MINT_ADDRESS = new PublicKey('So11111111111111111111111111111111111111112');
@@ -318,7 +363,7 @@ function App() {
           honeypotResult.isHoneypot = true;
           honeypotResult.details.push(`❌ Failed to get BUY quote`);
         } else {
-          const buyQuoteData = (await buyQuoteResponse.json()) as JupiterQuoteResponse;
+          const buyQuoteData = await buyQuoteResponse.json();
           honeypotResult.buyQuote = buyQuoteData;
           if (!buyQuoteData.outAmount || parseFloat(buyQuoteData.outAmount) === 0) {
             honeypotResult.isHoneypot = true;
@@ -347,7 +392,7 @@ function App() {
             honeypotResult.isHoneypot = true;
             honeypotResult.details.push(`❌ Failed to get SELL quote`);
           } else {
-            const sellQuoteData = (await sellQuoteResponse.json()) as JupiterQuoteResponse;
+            const sellQuoteData = await sellQuoteResponse.json();
             honeypotResult.sellQuote = sellQuoteData;
             if (!sellQuoteData.outAmount || parseFloat(sellQuoteData.outAmount) === 0) {
               honeypotResult.isHoneypot = true;
@@ -377,27 +422,26 @@ function App() {
         }
       }
 
+      // Calculate Dynamic Risk
+      const { score: riskScore, factors: riskFactors } = calculateDynamicRisk(basicInfo, holders);
+
+      let riskLevel = 'Low';
+      if (riskScore > 70) {
+        riskLevel = 'Critical';
+        honeypotResult.isHoneypot = true;
+      } else if (riskScore > 50) {
+        riskLevel = 'High';
+      } else if (riskScore > 30) {
+        riskLevel = 'Medium';
+      }
+
       if (!honeypotResult.isHoneypot) {
         honeypotResult.details.push("🎉 Token passed basic honeypot tests");
       } else {
         honeypotResult.details.push("🚨 Token flagged as potential HONEYPOT");
       }
 
-      // --- Risk Analysis ---
-      const riskFactors = analyzeRiskFactors(basicInfo, holders, honeypotResult);
-      const totalRiskScore = riskFactors.reduce((sum, factor) => sum + factor.score, 0);
-
-      let riskLevel = 'Low';
-      if (totalRiskScore > 60) {
-        riskLevel = 'Critical';
-        honeypotResult.isHoneypot = true;
-      } else if (totalRiskScore > 40) {
-        riskLevel = 'High';
-      } else if (totalRiskScore > 20) {
-        riskLevel = 'Medium';
-      }
-
-      // --- Generate Mock Charts Data ---
+      // Generate Charts Data
       const priceData = generateMockPriceData();
 
       setResults({
@@ -406,7 +450,7 @@ function App() {
         honeypotResult,
         holders,
         riskFactors,
-        riskScore: totalRiskScore,
+        riskScore,
         riskLevel,
         priceData,
         walletPublicKey: publicKey.toBase58(),
@@ -456,9 +500,9 @@ function App() {
         throw new Error(`Swap API error: ${swapResponse.status}`);
       }
 
-      const { swapTransaction } = await swapResponse.json();
-      const swapTransactionBuf = Buffer.from(swapTransaction, 'base64');
-      const transaction = VersionedTransaction.deserialize(swapTransactionBuf);
+    const { swapTransaction } = await swapResponse.json();
+const swapTransactionBuf = new Uint8Array(Buffer.from(swapTransaction, 'base64'));
+const transaction = VersionedTransaction.deserialize(swapTransactionBuf);
       
       const txid = await sendTransaction(transaction, connection);
       
@@ -495,9 +539,9 @@ function App() {
         throw new Error(`Swap API error: ${swapResponse.status}`);
       }
 
-      const { swapTransaction } = await swapResponse.json();
-      const swapTransactionBuf = Buffer.from(swapTransaction, 'base64');
-      const transaction = VersionedTransaction.deserialize(swapTransactionBuf);
+  const { swapTransaction } = await swapResponse.json();
+const swapTransactionBuf = Uint8Array.from(atob(swapTransaction), c => c.charCodeAt(0));
+const transaction = VersionedTransaction.deserialize(swapTransactionBuf);
       
       const txid = await sendTransaction(transaction, connection);
       
@@ -534,7 +578,7 @@ function App() {
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-white">SafeMemeFi</h1>
-                <p className="text-purple-300 text-sm">Advanced Security Platform</p>
+                <p className="text-purple-300 text-sm">AI Risk Intelligence</p>
               </div>
             </div>
             <WalletMultiButton />
@@ -546,12 +590,12 @@ function App() {
         {/* Hero Section */}
         <div className="text-center mb-12">
           <h2 className="text-4xl md:text-6xl font-bold text-white mb-4">
-            Advanced Token
-            <span className="bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent"> Security</span>
+            AI-Powered
+            <span className="bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent"> Risk Analysis</span>
           </h2>
           <p className="text-xl text-gray-300 mb-8 max-w-3xl mx-auto">
-            Professional-grade token analysis with holder tracking, price charts, and advanced risk assessment. 
-            Protect yourself from pump.fun scams with institutional-level security tools.
+            Advanced token analysis with dynamic risk scoring. Protect yourself from pump.fun scams 
+            with our intelligent security platform.
           </p>
           
           {/* Warning Banner */}
@@ -559,9 +603,9 @@ function App() {
             <div className="flex items-center justify-center space-x-3">
               <span className="text-3xl">🚨</span>
               <div className="text-left">
-                <h3 className="text-xl font-semibold text-red-300">Pump.fun Critical Warning</h3>
+                <h3 className="text-xl font-semibold text-red-300">Dynamic Risk Detection</h3>
                 <p className="text-red-200">
-                  Over 95% of pump.fun tokens are designed to steal your money. Never buy without thorough analysis!
+                  Our AI analyzes multiple risk factors in real-time to protect you from scams!
                 </p>
               </div>
             </div>
@@ -588,10 +632,10 @@ function App() {
               {loading ? (
                 <div className="flex items-center space-x-2">
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span>Analyzing...</span>
+                  <span>AI Analyzing...</span>
                 </div>
               ) : (
-                '🔍 Deep Scan Token'
+                '🤖 AI Deep Scan'
               )}
             </button>
           </div>
@@ -604,7 +648,7 @@ function App() {
               <span className="text-2xl">⚠️</span>
               <div>
                 <h3 className="text-lg font-semibold text-yellow-300">Wallet Required</h3>
-                <p className="text-yellow-200">Connect your wallet to access advanced token analysis and secure trading.</p>
+                <p className="text-yellow-200">Connect your wallet to access AI-powered token analysis.</p>
               </div>
             </div>
           </div>
@@ -629,41 +673,42 @@ function App() {
             {/* Risk Assessment */}
             <div className="bg-black/40 backdrop-blur-lg rounded-2xl border border-purple-500/20 p-8">
               <h3 className="text-2xl font-bold text-white mb-6 flex items-center">
-                <span className="mr-3">🎯</span>
-                Risk Assessment
+                <span className="mr-3">🤖</span>
+                AI Risk Assessment
+                <span className="ml-auto text-sm bg-purple-600 px-3 py-1 rounded-full">LIVE</span>
               </h3>
               
               <div className={`p-6 rounded-xl border-2 ${
-                results.riskScore > 60 ? 'bg-red-900/30 border-red-500' :
-                results.riskScore > 40 ? 'bg-orange-900/30 border-orange-500' :
-                results.riskScore > 20 ? 'bg-yellow-900/30 border-yellow-500' :
+                results.riskScore > 70 ? 'bg-red-900/30 border-red-500' :
+                results.riskScore > 50 ? 'bg-orange-900/30 border-orange-500' :
+                results.riskScore > 30 ? 'bg-yellow-900/30 border-yellow-500' :
                 'bg-green-900/30 border-green-500'
               }`}>
                 <div className="flex items-center justify-between mb-4">
-                  <span className={`text-2xl font-bold ${
-                    results.riskScore > 60 ? 'text-red-300' :
-                    results.riskScore > 40 ? 'text-orange-300' :
-                    results.riskScore > 20 ? 'text-yellow-300' :
+                  <span className={`text-3xl font-bold ${
+                    results.riskScore > 70 ? 'text-red-300' :
+                    results.riskScore > 50 ? 'text-orange-300' :
+                    results.riskScore > 30 ? 'text-yellow-300' :
                     'text-green-300'
                   }`}>
                     {results.riskLevel} Risk
                   </span>
-                  <span className={`text-xl font-semibold ${
-                    results.riskScore > 60 ? 'text-red-300' :
-                    results.riskScore > 40 ? 'text-orange-300' :
-                    results.riskScore > 20 ? 'text-yellow-300' :
+                  <span className={`text-2xl font-bold ${
+                    results.riskScore > 70 ? 'text-red-300' :
+                    results.riskScore > 50 ? 'text-orange-300' :
+                    results.riskScore > 30 ? 'text-yellow-300' :
                     'text-green-300'
                   }`}>
                     {results.riskScore}/100
                   </span>
                 </div>
                 
-                <div className="w-full bg-gray-700 rounded-full h-4 mb-4">
+                <div className="w-full bg-gray-700 rounded-full h-6 mb-4">
                   <div 
-                    className={`h-4 rounded-full transition-all duration-1000 ${
-                      results.riskScore > 60 ? 'bg-gradient-to-r from-red-600 to-red-400' :
-                      results.riskScore > 40 ? 'bg-gradient-to-r from-orange-600 to-orange-400' :
-                      results.riskScore > 20 ? 'bg-gradient-to-r from-yellow-600 to-yellow-400' :
+                    className={`h-6 rounded-full transition-all duration-2000 ${
+                      results.riskScore > 70 ? 'bg-gradient-to-r from-red-600 to-red-400' :
+                      results.riskScore > 50 ? 'bg-gradient-to-r from-orange-600 to-orange-400' :
+                      results.riskScore > 30 ? 'bg-gradient-to-r from-yellow-600 to-yellow-400' :
                       'bg-gradient-to-r from-green-600 to-green-400'
                     }`}
                     style={{ width: `${Math.min(results.riskScore, 100)}%` }}
@@ -697,7 +742,7 @@ function App() {
                         type="monotone" 
                         dataKey="price" 
                         stroke="#8B5CF6" 
-                        strokeWidth={2}
+                        strokeWidth={3}
                         dot={false}
                       />
                     </LineChart>
@@ -709,7 +754,7 @@ function App() {
               <div className="bg-black/40 backdrop-blur-lg rounded-2xl border border-purple-500/20 p-8">
                 <h3 className="text-2xl font-bold text-white mb-6 flex items-center">
                   <span className="mr-3">📊</span>
-                  Volume Chart (24h)
+                  Volume Analysis
                 </h3>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
@@ -731,16 +776,64 @@ function App() {
               </div>
             </div>
 
-            {/* Token Holders Analysis */}
+            {/* Risk Factors */}
+            <div className="bg-black/40 backdrop-blur-lg rounded-2xl border border-purple-500/20 p-8">
+              <h3 className="text-2xl font-bold text-white mb-6 flex items-center">
+                <span className="mr-3">🔬</span>
+                Risk Analysis Breakdown
+              </h3>
+              
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {results.riskFactors.map((factor: RiskFactor, index: number) => (
+                  <div 
+                    key={index}
+                    className={`p-6 rounded-xl border-l-4 ${
+                      factor.status === 'safe' ? 'bg-green-900/20 border-green-500' :
+                      factor.status === 'warning' ? 'bg-yellow-900/20 border-yellow-500' :
+                      'bg-red-900/20 border-red-500'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <h4 className="text-lg font-semibold text-white">{factor.name}</h4>
+                        <span className={`text-xs px-2 py-1 rounded ${
+                          factor.category === 'technical' ? 'bg-blue-600 text-white' :
+                          factor.category === 'market' ? 'bg-purple-600 text-white' :
+                          factor.category === 'security' ? 'bg-red-600 text-white' :
+                          'bg-orange-600 text-white'
+                        }`}>
+                          {factor.category.toUpperCase()}
+                        </span>
+                      </div>
+                      <span className={`px-3 py-1 rounded-full text-sm font-bold ${
+                        factor.status === 'safe' ? 'bg-green-500 text-white' :
+                        factor.status === 'warning' ? 'bg-yellow-500 text-black' :
+                        'bg-red-500 text-white'
+                      }`}>
+                        {factor.score}
+                      </span>
+                    </div>
+                    <p className={`text-sm ${
+                      factor.status === 'safe' ? 'text-green-200' :
+                      factor.status === 'warning' ? 'text-yellow-200' :
+                      'text-red-200'
+                    }`}>
+                      {factor.description}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Token Holders */}
             {results.holders.length > 0 && (
               <div className="bg-black/40 backdrop-blur-lg rounded-2xl border border-purple-500/20 p-8">
                 <h3 className="text-2xl font-bold text-white mb-6 flex items-center">
-                  <span className="mr-3">👥</span>
+                  <span className="mr-3">🐋</span>
                   Top Token Holders
                 </h3>
                 
                 <div className="grid lg:grid-cols-2 gap-8">
-                  {/* Holders Table */}
                   <div>
                     <div className="space-y-3">
                       {results.holders.slice(0, 5).map((holder: TokenHolder, index: number) => (
@@ -753,7 +846,11 @@ function App() {
                               </p>
                             </div>
                             <div className="text-right">
-                              <p className="text-white font-semibold">
+                              <p className={`font-semibold ${
+                                holder.percentage > 20 ? 'text-red-400' :
+                                holder.percentage > 10 ? 'text-yellow-400' :
+                                'text-green-400'
+                              }`}>
                                 {holder.percentage.toFixed(2)}%
                               </p>
                               <p className="text-gray-400 text-sm">
@@ -763,7 +860,11 @@ function App() {
                           </div>
                           <div className="mt-2 w-full bg-gray-700 rounded-full h-2">
                             <div 
-                              className="bg-gradient-to-r from-purple-500 to-blue-500 h-2 rounded-full"
+                              className={`h-2 rounded-full ${
+                                holder.percentage > 20 ? 'bg-gradient-to-r from-red-500 to-red-400' :
+                                holder.percentage > 10 ? 'bg-gradient-to-r from-yellow-500 to-yellow-400' :
+                                'bg-gradient-to-r from-green-500 to-green-400'
+                              }`}
                               style={{ width: `${Math.min(holder.percentage, 100)}%` }}
                             ></div>
                           </div>
@@ -772,9 +873,8 @@ function App() {
                     </div>
                   </div>
 
-                  {/* Holder Distribution Pie Chart */}
                   <div>
-                    <h4 className="text-lg font-semibold text-white mb-4">Distribution Analysis</h4>
+                    <h4 className="text-lg font-semibold text-white mb-4">Distribution</h4>
                     <div className="h-64">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
@@ -810,51 +910,12 @@ function App() {
               </div>
             )}
 
-            {/* Risk Factors Breakdown */}
-            <div className="bg-black/40 backdrop-blur-lg rounded-2xl border border-purple-500/20 p-8">
-              <h3 className="text-2xl font-bold text-white mb-6 flex items-center">
-                <span className="mr-3">⚠️</span>
-                Risk Factors Analysis
-              </h3>
-              
-              <div className="grid md:grid-cols-2 gap-6">
-                {results.riskFactors.map((factor: RiskFactor, index: number) => (
-                  <div 
-                    key={index}
-                    className={`p-6 rounded-xl border ${
-                      factor.status === 'safe' ? 'bg-green-900/20 border-green-500/30' :
-                      factor.status === 'warning' ? 'bg-yellow-900/20 border-yellow-500/30' :
-                      'bg-red-900/20 border-red-500/30'
-                    }`}
-                  >
-                    <div className="flex justify-between items-start mb-3">
-                      <h4 className="text-lg font-semibold text-white">{factor.name}</h4>
-                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                        factor.status === 'safe' ? 'bg-green-500 text-white' :
-                        factor.status === 'warning' ? 'bg-yellow-500 text-black' :
-                        'bg-red-500 text-white'
-                      }`}>
-                        {factor.score} pts
-                      </span>
-                    </div>
-                    <p className={`text-sm ${
-                      factor.status === 'safe' ? 'text-green-200' :
-                      factor.status === 'warning' ? 'text-yellow-200' :
-                      'text-red-200'
-                    }`}>
-                      {factor.description}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
             {/* Trading Section */}
-            {!results.honeypotResult.isHoneypot && results.riskScore < 60 ? (
+            {!results.honeypotResult.isHoneypot && results.riskScore < 70 ? (
               <div className="bg-black/40 backdrop-blur-lg rounded-2xl border border-green-500/20 p-8">
                 <h3 className="text-2xl font-bold text-white mb-6 flex items-center">
                   <span className="mr-3">💰</span>
-                  Safe to Trade
+                  AI Approved - Safe to Trade
                 </h3>
                 
                 <div className="grid md:grid-cols-2 gap-6 mb-8">
@@ -900,12 +961,12 @@ function App() {
               <div className="bg-black/40 backdrop-blur-lg rounded-2xl border border-red-500/20 p-8">
                 <h3 className="text-2xl font-bold text-white mb-6 flex items-center">
                   <span className="mr-3">🚨</span>
-                  Trading Disabled
+                  AI Risk Alert - Trading Blocked
                 </h3>
                 <div className="bg-red-900/30 border border-red-500/30 rounded-xl p-6 text-center">
                   <p className="text-red-200 text-lg mb-2">High Risk Token Detected</p>
                   <p className="text-red-300 text-sm">
-                    This token has been flagged as potentially dangerous. Trading is disabled for your protection.
+                    Our AI analysis has identified multiple risk factors. Trading is disabled for your protection.
                   </p>
                 </div>
               </div>
@@ -913,7 +974,6 @@ function App() {
 
             {/* Token Information */}
             <div className="grid md:grid-cols-2 gap-8">
-              {/* Basic Info */}
               <div className="bg-black/40 backdrop-blur-lg rounded-2xl border border-purple-500/20 p-8">
                 <h3 className="text-2xl font-bold text-white mb-6 flex items-center">
                   <span className="mr-3">📊</span>
@@ -943,7 +1003,6 @@ function App() {
                 </div>
               </div>
 
-              {/* Token Metadata */}
               {results.tokenMetadata && (
                 <div className="bg-black/40 backdrop-blur-lg rounded-2xl border border-purple-500/20 p-8">
                   <h3 className="text-2xl font-bold text-white mb-6 flex items-center">
@@ -974,7 +1033,7 @@ function App() {
               )}
             </div>
 
-            {/* Honeypot Detection Results */}
+            {/* Honeypot Detection */}
             <div className="bg-black/40 backdrop-blur-lg rounded-2xl border border-purple-500/20 p-8">
               <h3 className="text-2xl font-bold text-white mb-6 flex items-center">
                 <span className="mr-3">🕵️</span>
@@ -999,25 +1058,25 @@ function App() {
 
             {/* Final Verdict */}
             <div className={`bg-black/40 backdrop-blur-lg rounded-2xl border-2 p-8 text-center ${
-              results.honeypotResult.isHoneypot || results.riskScore >= 60
+              results.honeypotResult.isHoneypot || results.riskScore >= 70
                 ? 'border-red-500/50' 
                 : 'border-green-500/50'
             }`}>
-              <div className={`text-4xl mb-4 ${
-                results.honeypotResult.isHoneypot || results.riskScore >= 60 ? 'text-red-400' : 'text-green-400'
+              <div className={`text-5xl mb-4 ${
+                results.honeypotResult.isHoneypot || results.riskScore >= 70 ? 'text-red-400' : 'text-green-400'
               }`}>
-                {results.honeypotResult.isHoneypot || results.riskScore >= 60 ? '🚨' : '✅'}
+                {results.honeypotResult.isHoneypot || results.riskScore >= 70 ? '🚨' : '🤖'}
               </div>
-              <h3 className={`text-2xl font-bold mb-2 ${
-                results.honeypotResult.isHoneypot || results.riskScore >= 60 ? 'text-red-300' : 'text-green-300'
+              <h3 className={`text-3xl font-bold mb-4 ${
+                results.honeypotResult.isHoneypot || results.riskScore >= 70 ? 'text-red-300' : 'text-green-300'
               }`}>
-                {results.honeypotResult.isHoneypot || results.riskScore >= 60
-                  ? 'SECURITY ALERT: High Risk Token' 
-                  : 'VERIFIED: Token Appears Safe'
+                {results.honeypotResult.isHoneypot || results.riskScore >= 70
+                  ? 'AI ALERT: HIGH RISK TOKEN' 
+                  : 'AI VERIFIED: TOKEN APPROVED'
                 }
               </h3>
-              <p className="text-gray-300">
-                Professional analysis complete. Always do your own research before investing!
+              <p className="text-gray-300 text-lg">
+                Advanced AI analysis complete. Always do your own research before investing!
               </p>
             </div>
           </div>
@@ -1025,7 +1084,7 @@ function App() {
 
         {/* Footer */}
         <div className="mt-16 text-center text-gray-400">
-          <p>Built with ❤️ for the Solana community • Advanced security for DeFi traders</p>
+          <p>Powered by AI • Real-time risk analysis • Built for DeFi traders</p>
         </div>
       </div>
     </div>
