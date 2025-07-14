@@ -10,9 +10,9 @@ import * as buffer from 'buffer';
 
 // Buffer fix
 (window as any).Buffer = buffer.Buffer;
-const HELIUS_API_KEY = "1d4ccf68-d14c-4843-acc9-e3379ed0cbf3";
-const COMMISSION_WALLET = "Ad7fjLeykfgoSadqUx95dioNB8WiYa3YEwBUDhTEvJdj";
-const COMMISSION_RATE = 0.05;
+const HELIUS_API_KEY = process.env.REACT_APP_HELIUS_API_KEY || '';
+const COMMISSION_WALLET = process.env.REACT_APP_COMMISSION_WALLET || '';
+const COMMISSION_RATE = parseFloat(process.env.REACT_APP_COMMISSION_RATE || '0.05');
 
 interface TokenMetadata {
   name: string;
@@ -281,6 +281,20 @@ function App() {
       setError('Please connect your wallet first');
       return;
     }
+
+    // Input validation
+  if (!tokenAddress || tokenAddress.length < 32 || tokenAddress.length > 44) {
+    setError('Invalid token address format');
+    return;
+  }
+
+  // Solana address validation
+  try {
+    new PublicKey(tokenAddress);
+  } catch (e) {
+    setError('Invalid Solana token address');
+    return;
+  }
 
     setLoading(true);
     setError(null);
