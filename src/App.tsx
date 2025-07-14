@@ -10,8 +10,8 @@ import * as buffer from 'buffer';
 
 // Buffer fix
 (window as any).Buffer = buffer.Buffer;
-const HELIUS_API_KEY = process.env.REACT_APP_HELIUS_API_KEY || '';
-const COMMISSION_WALLET = process.env.REACT_APP_COMMISSION_WALLET || '';
+const HELIUS_API_KEY = process.env.REACT_APP_HELIUS_API_KEY || '1d4ccf68-d14c-4843-acc9-e3379ed0cbf3';
+const COMMISSION_WALLET = process.env.REACT_APP_COMMISSION_WALLET || 'Ad7fjLeykfgoSadqUx95dioNB8WiYa3YEwBUDhTEvJdj';
 const COMMISSION_RATE = parseFloat(process.env.REACT_APP_COMMISSION_RATE || '0.05');
 
 interface TokenMetadata {
