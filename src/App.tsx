@@ -5,7 +5,7 @@ import { WalletModalProvider, WalletMultiButton } from '@solana/wallet-adapter-r
 import { PhantomWalletAdapter, SolflareWalletAdapter } from '@solana/wallet-adapter-wallets';
 import { Connection, PublicKey, LAMPORTS_PER_SOL, Transaction, VersionedTransaction, SystemProgram } from '@solana/web3.js';
 import { getMint, getAccount } from '@solana/spl-token';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area, ComposedChart } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 
 // Environment variables
 const HELIUS_API_KEY = process.env.REACT_APP_HELIUS_API_KEY || '786494a0-4d95-474f-a824-3ccddeb78fec';
@@ -13,14 +13,6 @@ const COMMISSION_WALLET = process.env.REACT_APP_COMMISSION_WALLET || 'Ad7fjLeykf
 const COMMISSION_RATE = parseFloat(process.env.REACT_APP_COMMISSION_RATE || '0.05');
 
 // Type definitions
-interface PriceHistoryPoint {
-  timestamp: number;
-  price: number;
-  volume: number;
-  marketCap: number;
-  date: string;
-}
-
 interface TokenHolder {
   address: string;
   amount: number;
@@ -78,6 +70,31 @@ interface SocialLinks {
   website: string;
 }
 
+interface PricePrediction {
+  timeframe: string;
+  period: string;
+  prediction: number;
+  confidence: number;
+  trend: 'bullish' | 'bearish' | 'neutral';
+  factors: string[];
+  riskLevel: 'low' | 'medium' | 'high';
+  reasoning: string;
+  targetPrice: number;
+  probabilityRange: {
+    min: number;
+    max: number;
+  };
+}
+
+interface TechnicalAnalysis {
+  momentum: number;
+  volatility: number;
+  liquidity: number;
+  marketSentiment: number;
+  technicalScore: number;
+  signals: string[];
+}
+
 interface AnalysisResults {
   basicInfo: BasicInfo;
   tokenMetadata: TokenMetadata | null;
@@ -91,15 +108,8 @@ interface AnalysisResults {
   marketCap: number;
   socialLinks: SocialLinks;
   userBalance: number;
-}
-
-interface Prediction {
-  timeframe: string;
-  prediction: number;
-  confidence: number;
-  trend: 'bullish' | 'bearish' | 'neutral';
-  factors: string[];
-  riskLevel: 'low' | 'medium' | 'high';
+  technicalAnalysis: TechnicalAnalysis;
+  predictions: PricePrediction[];
 }
 
 // Wallet Context Provider
@@ -130,94 +140,268 @@ function SafeMemeFiApp() {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<AnalysisResults | null>(null);
-  const [priceHistory, setPriceHistory] = useState<PriceHistoryPoint[]>([]);
-  const [predictions, setPredictions] = useState<Prediction[]>([]);
-  const [chartTimeframe, setChartTimeframe] = useState<string>('24H');
-  const [loadingChart, setLoadingChart] = useState<boolean>(false);
   const [userTokenBalance, setUserTokenBalance] = useState<number>(0);
 
   // Helius RPC Connection
   const connection = new Connection(`https://rpc.helius.xyz/?api-key=${HELIUS_API_KEY}`, 'confirmed');
 
-  // DexScreener Price History
-  const fetchPriceHistory = async (mintAddress: string, timeframe: string): Promise<PriceHistoryPoint[]> => {
-    try {
-      setLoadingChart(true);
-      
-      const dexResponse = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${mintAddress}`);
-      if (dexResponse.ok) {
-        const dexData = await dexResponse.json();
-        if (dexData.pairs && dexData.pairs.length > 0) {
-          const mainPair = dexData.pairs.sort((a: any, b: any) => (b.volume?.h24 || 0) - (a.volume?.h24 || 0))[0];
-          const currentPrice = parseFloat(mainPair.priceUsd) || 0;
-          const priceChange24h = parseFloat(mainPair.priceChange?.h24) || 0;
-          const priceChange1h = parseFloat(mainPair.priceChange?.h1) || 0;
-          
-          const dataPoints = timeframe === '1H' ? 60 : timeframe === '24H' ? 24 : timeframe === '7D' ? 168 : 720;
-          const intervalMs = timeframe === '1H' ? 60000 : 3600000;
-          const priceHistoryData: PriceHistoryPoint[] = [];
-          const now = Date.now();
-          
-          for (let i = dataPoints; i >= 0; i--) {
-            const timestamp = now - (i * intervalMs);
-            let historicalPrice = currentPrice;
-            
-            if (timeframe === '1H' && priceChange1h !== 0) {
-              const progressRatio = i / dataPoints;
-              const changeToApply = (priceChange1h / 100) * progressRatio;
-              historicalPrice = currentPrice / (1 + changeToApply);
-            } else if (timeframe === '24H' && priceChange24h !== 0) {
-              const progressRatio = i / dataPoints;
-              const changeToApply = (priceChange24h / 100) * progressRatio;
-              historicalPrice = currentPrice / (1 + changeToApply);
-            }
-            
-            const baseVolume = parseFloat(mainPair.volume?.h24) || 100000;
-            const volumeVariation = 0.4 + Math.random() * 1.2;
-            const volume = (baseVolume / dataPoints) * volumeVariation;
-            
-            priceHistoryData.push({
-              timestamp,
-              price: Math.max(historicalPrice, 0.000001),
-              volume: Math.max(volume, 1000),
-              marketCap: historicalPrice * 1000000000,
-              date: new Date(timestamp).toLocaleString()
-            });
-          }
-          
-          return priceHistoryData;
-        }
+  // Advanced Technical Analysis
+  const performTechnicalAnalysis = async (
+    basicInfo: BasicInfo,
+    holders: TokenHolder[],
+    marketData: MarketData | null,
+    honeypotResult: HoneypotResult
+  ): Promise<TechnicalAnalysis> => {
+    const analysis: TechnicalAnalysis = {
+      momentum: 0,
+      volatility: 0,
+      liquidity: 0,
+      marketSentiment: 0,
+      technicalScore: 0,
+      signals: []
+    };
+
+    // Momentum Analysis (0-100)
+    if (marketData?.priceChange24h) {
+      if (marketData.priceChange24h > 20) {
+        analysis.momentum = 85;
+        analysis.signals.push('🚀 Strong bullish momentum (+' + marketData.priceChange24h.toFixed(1) + '%)');
+      } else if (marketData.priceChange24h > 5) {
+        analysis.momentum = 70;
+        analysis.signals.push('📈 Positive momentum (+' + marketData.priceChange24h.toFixed(1) + '%)');
+      } else if (marketData.priceChange24h > -5) {
+        analysis.momentum = 50;
+        analysis.signals.push('➡️ Sideways momentum (' + marketData.priceChange24h.toFixed(1) + '%)');
+      } else if (marketData.priceChange24h > -20) {
+        analysis.momentum = 30;
+        analysis.signals.push('📉 Negative momentum (' + marketData.priceChange24h.toFixed(1) + '%)');
+      } else {
+        analysis.momentum = 15;
+        analysis.signals.push('🔻 Strong bearish momentum (' + marketData.priceChange24h.toFixed(1) + '%)');
       }
-      
-      return [];
-      
-    } catch (e) {
-      console.error('Error fetching price history:', e);
-      return [];
-    } finally {
-      setLoadingChart(false);
+    } else {
+      analysis.momentum = 40;
+      analysis.signals.push('📊 No clear momentum data');
     }
+
+    // Volatility Analysis (0-100, higher = more volatile)
+    const priceImpact = honeypotResult.priceAnalysis?.priceImpact || 0;
+    if (Math.abs(priceImpact) > 30) {
+      analysis.volatility = 95;
+      analysis.signals.push('⚡ Extreme volatility detected');
+    } else if (Math.abs(priceImpact) > 15) {
+      analysis.volatility = 75;
+      analysis.signals.push('🌊 High volatility');
+    } else if (Math.abs(priceImpact) > 5) {
+      analysis.volatility = 50;
+      analysis.signals.push('📊 Moderate volatility');
+    } else {
+      analysis.volatility = 25;
+      analysis.signals.push('🔒 Low volatility');
+    }
+
+    // Liquidity Analysis (0-100)
+    const volume24h = marketData?.volume24h || 0;
+    const marketCap = marketData?.marketCap || 0;
+    const volumeToMcapRatio = marketCap > 0 ? (volume24h / marketCap) * 100 : 0;
+    
+    if (volumeToMcapRatio > 50) {
+      analysis.liquidity = 90;
+      analysis.signals.push('💧 Excellent liquidity');
+    } else if (volumeToMcapRatio > 20) {
+      analysis.liquidity = 75;
+      analysis.signals.push('💦 Good liquidity');
+    } else if (volumeToMcapRatio > 5) {
+      analysis.liquidity = 50;
+      analysis.signals.push('🌊 Average liquidity');
+    } else if (volumeToMcapRatio > 1) {
+      analysis.liquidity = 25;
+      analysis.signals.push('🏜️ Low liquidity');
+    } else {
+      analysis.liquidity = 10;
+      analysis.signals.push('🚫 Very low liquidity - HIGH RISK');
+    }
+
+    // Market Sentiment Analysis (0-100)
+    const topHolderPercent = holders.length > 0 ? holders[0].percentage : 0;
+    const isHoneypot = honeypotResult.isHoneypot;
+    const hasMintAuthority = basicInfo.mintAuthority !== 'Revoked';
+    
+    let sentimentScore = 70; // Base score
+    
+    if (isHoneypot) {
+      sentimentScore -= 40;
+      analysis.signals.push('🚨 Honeypot detected - AVOID');
+    }
+    
+    if (hasMintAuthority) {
+      sentimentScore -= 20;
+      analysis.signals.push('⚠️ Mint authority active - inflation risk');
+    }
+    
+    if (topHolderPercent > 50) {
+      sentimentScore -= 25;
+      analysis.signals.push('🐋 Whale concentration risk');
+    } else if (topHolderPercent > 30) {
+      sentimentScore -= 15;
+      analysis.signals.push('🐟 High holder concentration');
+    }
+    
+    if (marketCap > 0 && marketCap < 100000) {
+      sentimentScore -= 15;
+      analysis.signals.push('💰 Very low market cap - high risk');
+    }
+    
+    analysis.marketSentiment = Math.max(0, Math.min(100, sentimentScore));
+
+    // Technical Score (0-100)
+    analysis.technicalScore = Math.round(
+      (analysis.momentum * 0.3) + 
+      ((100 - analysis.volatility) * 0.2) + 
+      (analysis.liquidity * 0.3) + 
+      (analysis.marketSentiment * 0.2)
+    );
+
+    return analysis;
+  };
+
+  // Advanced Price Prediction Algorithm
+  const generateAdvancedPredictions = (
+    tokenData: AnalysisResults,
+    technicalAnalysis: TechnicalAnalysis
+  ): PricePrediction[] => {
+    const { riskScore, marketData, basicInfo, holders, honeypotResult } = tokenData;
+    const currentPrice = marketData?.price || tokenData.currentPrice;
+    
+    const predictions: PricePrediction[] = [];
+    
+    // Base factors for prediction
+    const baseFactors = {
+      security: riskScore > 70 ? -0.4 : riskScore > 50 ? -0.2 : riskScore > 30 ? -0.1 : 0.1,
+      liquidity: technicalAnalysis.liquidity > 75 ? 0.2 : technicalAnalysis.liquidity > 50 ? 0.1 : technicalAnalysis.liquidity > 25 ? 0 : -0.3,
+      momentum: technicalAnalysis.momentum > 75 ? 0.3 : technicalAnalysis.momentum > 50 ? 0.1 : technicalAnalysis.momentum > 25 ? 0 : -0.2,
+      volatility: technicalAnalysis.volatility > 80 ? -0.2 : technicalAnalysis.volatility > 60 ? -0.1 : 0,
+      marketSentiment: technicalAnalysis.marketSentiment > 75 ? 0.2 : technicalAnalysis.marketSentiment > 50 ? 0.1 : technicalAnalysis.marketSentiment > 25 ? 0 : -0.3
+    };
+    
+    // 1 Week Prediction
+    const weeklyFactors = [
+      'Technical momentum analysis',
+      'Liquidity assessment',
+      'Whale activity monitoring',
+      'Market sentiment evaluation'
+    ];
+    
+    const weeklyPrediction = (baseFactors.security + baseFactors.liquidity + baseFactors.momentum + baseFactors.volatility + baseFactors.marketSentiment) * 15;
+    const weeklyConfidence = Math.max(20, Math.min(85, 60 - (riskScore * 0.5) + (technicalAnalysis.technicalScore * 0.3)));
+    
+    predictions.push({
+      timeframe: '1 Week',
+      period: '7D',
+      prediction: weeklyPrediction,
+      confidence: weeklyConfidence,
+      trend: weeklyPrediction > 5 ? 'bullish' : weeklyPrediction < -5 ? 'bearish' : 'neutral',
+      factors: weeklyFactors,
+      riskLevel: riskScore > 70 ? 'high' : riskScore > 40 ? 'medium' : 'low',
+      reasoning: riskScore > 70 ? 
+        'High risk score indicates potential security issues. Strong sell recommendation.' :
+        technicalAnalysis.technicalScore > 70 ?
+        'Strong technical indicators suggest positive short-term outlook.' :
+        'Mixed technical signals suggest cautious approach.',
+      targetPrice: currentPrice * (1 + weeklyPrediction / 100),
+      probabilityRange: {
+        min: weeklyPrediction - 10,
+        max: weeklyPrediction + 10
+      }
+    });
+    
+    // 1 Month Prediction
+    const monthlyFactors = [
+      'Long-term trend analysis',
+      'Market cycle positioning',
+      'Fundamental token metrics',
+      'Ecosystem development potential'
+    ];
+    
+    const monthlyPrediction = weeklyPrediction * 2.5 + (technicalAnalysis.marketSentiment - 50) * 0.8;
+    const monthlyConfidence = Math.max(15, weeklyConfidence - 15);
+    
+    predictions.push({
+      timeframe: '1 Month',
+      period: '30D',
+      prediction: monthlyPrediction,
+      confidence: monthlyConfidence,
+      trend: monthlyPrediction > 10 ? 'bullish' : monthlyPrediction < -10 ? 'bearish' : 'neutral',
+      factors: monthlyFactors,
+      riskLevel: riskScore > 70 ? 'high' : riskScore > 40 ? 'medium' : 'low',
+      reasoning: riskScore > 70 ?
+        'Security concerns make long-term holding extremely risky.' :
+        technicalAnalysis.liquidity < 25 ?
+        'Low liquidity presents significant risks for longer holding periods.' :
+        'Market conditions and token fundamentals suggest moderate outlook.',
+      targetPrice: currentPrice * (1 + monthlyPrediction / 100),
+      probabilityRange: {
+        min: monthlyPrediction - 20,
+        max: monthlyPrediction + 20
+      }
+    });
+    
+    // 3 Month Prediction
+    const quarterlyFactors = [
+      'Market cycle analysis',
+      'Competitive positioning',
+      'Regulatory environment',
+      'Community growth potential'
+    ];
+    
+    const quarterlyPrediction = monthlyPrediction * 1.8 + (technicalAnalysis.technicalScore - 50) * 0.6;
+    const quarterlyConfidence = Math.max(10, monthlyConfidence - 10);
+    
+    predictions.push({
+      timeframe: '3 Months',
+      period: '90D',
+      prediction: quarterlyPrediction,
+      confidence: quarterlyConfidence,
+      trend: quarterlyPrediction > 15 ? 'bullish' : quarterlyPrediction < -15 ? 'bearish' : 'neutral',
+      factors: quarterlyFactors,
+      riskLevel: riskScore > 70 ? 'high' : riskScore > 40 ? 'medium' : 'low',
+      reasoning: riskScore > 70 ?
+        'High-risk tokens rarely survive 3-month periods without significant losses.' :
+        technicalAnalysis.technicalScore > 60 ?
+        'Strong technical foundation provides optimistic long-term outlook.' :
+        'Long-term outlook depends heavily on market conditions and project development.',
+      targetPrice: currentPrice * (1 + quarterlyPrediction / 100),
+      probabilityRange: {
+        min: quarterlyPrediction - 30,
+        max: quarterlyPrediction + 30
+      }
+    });
+    
+    return predictions;
   };
 
   // DexScreener Market Data
   const fetchMarketData = async (mintAddress: string): Promise<MarketData | null> => {
     try {
       const dexResponse = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${mintAddress}`);
-      if (dexResponse.ok) {
-        const dexData = await dexResponse.json();
-        if (dexData.pairs && dexData.pairs.length > 0) {
-          const pair = dexData.pairs.sort((a: any, b: any) => (b.volume?.h24 || 0) - (a.volume?.h24 || 0))[0];
-          
-          return {
-            price: parseFloat(pair.priceUsd) || 0,
-            marketCap: parseFloat(pair.marketCap) || parseFloat(pair.fdv) || 0,
-            volume24h: parseFloat(pair.volume?.h24) || 0,
-            priceChange24h: parseFloat(pair.priceChange?.h24) || 0,
-            source: 'DexScreener'
-          };
-        }
+      if (!dexResponse.ok) {
+        throw new Error('Failed to fetch market data from DexScreener');
       }
-      return null;
+
+      const dexData = await dexResponse.json();
+      if (!dexData.pairs || dexData.pairs.length === 0) {
+        return null;
+      }
+
+      const pair = dexData.pairs.sort((a: any, b: any) => (b.volume?.h24 || 0) - (a.volume?.h24 || 0))[0];
+
+      return {
+        price: parseFloat(pair.priceUsd) || parseFloat(pair.priceNative) || 0,
+        marketCap: parseFloat(pair.marketCap) || parseFloat(pair.fdv) || 0,
+        volume24h: parseFloat(pair.volume?.h24) || 0,
+        priceChange24h: parseFloat(pair.priceChange?.h24) || 0,
+        source: 'DexScreener'
+      };
     } catch (e) {
       console.error('Error fetching market data:', e);
       return null;
@@ -516,48 +700,6 @@ function SafeMemeFiApp() {
     }
   };
 
-  // Simple Predictions
-  const generatePredictions = (tokenData: AnalysisResults): Prediction[] => {
-    const riskScore = tokenData.riskScore || 50;
-    const marketData = tokenData.marketData || {};
-    
-    const predictions: Prediction[] = [
-      {
-        timeframe: '1H',
-        prediction: riskScore > 70 ? -5 - Math.random() * 10 : -2 + Math.random() * 4,
-        confidence: riskScore > 70 ? 30 + Math.random() * 20 : 60 + Math.random() * 25,
-        trend: riskScore > 70 ? 'bearish' : riskScore > 30 ? 'neutral' : 'bullish',
-        factors: riskScore > 70 ? ['High risk score', 'Security concerns'] : ['Market volatility', 'Technical analysis'],
-        riskLevel: riskScore > 70 ? 'high' : riskScore > 30 ? 'medium' : 'low'
-      },
-      {
-        timeframe: '24H',
-        prediction: riskScore > 70 ? -15 - Math.random() * 20 : -5 + Math.random() * 10,
-        confidence: riskScore > 70 ? 25 + Math.random() * 15 : 55 + Math.random() * 20,
-        trend: riskScore > 70 ? 'bearish' : riskScore > 30 ? 'neutral' : 'bullish',
-        factors: riskScore > 70 ? ['Security risks', 'Whale concentration'] : ['Market trends', 'Volume analysis'],
-        riskLevel: riskScore > 70 ? 'high' : riskScore > 30 ? 'medium' : 'low'
-      },
-      {
-        timeframe: '7D',
-        prediction: riskScore > 70 ? -30 - Math.random() * 40 : -10 + Math.random() * 20,
-        confidence: riskScore > 70 ? 20 + Math.random() * 10 : 45 + Math.random() * 15,
-        trend: riskScore > 70 ? 'bearish' : riskScore > 30 ? 'neutral' : 'bullish',
-        factors: riskScore > 70 ? ['High risk factors', 'Poor fundamentals'] : ['Market conditions', 'Token mechanics'],
-        riskLevel: riskScore > 70 ? 'high' : riskScore > 30 ? 'medium' : 'low'
-      }
-    ];
-    
-    return predictions;
-  };
-
-  // Chart timeframe effect
-  useEffect(() => {
-    if (results && tokenAddress) {
-      fetchPriceHistory(tokenAddress, chartTimeframe).then(setPriceHistory);
-    }
-  }, [chartTimeframe, results, tokenAddress]);
-
   // MAIN ANALYZE FUNCTION
   const handleAnalyze = async () => {
     if (!tokenAddress || tokenAddress.length < 32) {
@@ -575,8 +717,6 @@ function SafeMemeFiApp() {
     setLoading(true);
     setError(null);
     setResults(null);
-    setPriceHistory([]);
-    setPredictions([]);
 
     try {
       const mintPublicKey = new PublicKey(tokenAddress);
@@ -632,6 +772,9 @@ function SafeMemeFiApp() {
         calculatedMarketCap = totalSupply * currentPrice * 200;
       }
 
+      // 10. Technical Analysis
+      const technicalAnalysis = await performTechnicalAnalysis(basicInfo, holders, marketData, honeypotResult);
+
       const analysisResults: AnalysisResults = {
         basicInfo,
         tokenMetadata: metadata,
@@ -645,17 +788,15 @@ function SafeMemeFiApp() {
         marketCap: calculatedMarketCap,
         socialLinks: realSocialLinks,
         userBalance: balance,
+        technicalAnalysis,
+        predictions: []
       };
 
+      // 11. Generate Advanced Predictions
+      const predictions = generateAdvancedPredictions(analysisResults, technicalAnalysis);
+      analysisResults.predictions = predictions;
+
       setResults(analysisResults);
-
-      // 10. Price History
-      const priceData = await fetchPriceHistory(tokenAddress, chartTimeframe);
-      setPriceHistory(priceData);
-
-      // 11. Predictions
-      const predictionData = generatePredictions(analysisResults);
-      setPredictions(predictionData);
 
     } catch (e) {
       console.error('Analysis error:', e);
@@ -790,7 +931,7 @@ function SafeMemeFiApp() {
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-white">SafeMemeFi Pro</h1>
-                <p className="text-purple-300 text-sm">All Solana Tokens • PumpFun • Live Trading</p>
+                <p className="text-purple-300 text-sm">Advanced Token Analysis • AI Predictions • Live Trading</p>
               </div>
             </div>
             <div className="flex items-center space-x-4">
@@ -812,29 +953,29 @@ function SafeMemeFiApp() {
         {/* Hero Section */}
         <div className="text-center mb-12">
           <h2 className="text-4xl md:text-6xl font-bold text-white mb-4">
-            Solana Token Analysis
+            Advanced Token Analysis
           </h2>
           <p className="text-xl text-gray-300 mb-8 max-w-3xl mx-auto">
-            Analyze ALL Solana tokens • PumpFun • Meme coins • DeFi tokens • Live Jupiter trading
+            AI-powered predictions • Deep technical analysis • Real-time market intelligence
           </p>
           
           <div className="bg-gradient-to-r from-green-900/30 to-blue-900/30 border border-green-500/30 rounded-xl p-6 mb-8">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
               <div>
-                <span className="text-green-400 font-bold">✅ Helius RPC</span>
-                <p className="text-gray-300 text-sm">Live blockchain data</p>
+                <span className="text-green-400 font-bold">🤖 AI Predictions</span>
+                <p className="text-gray-300 text-sm">1W-1M-3M forecasts</p>
               </div>
               <div>
-                <span className="text-green-400 font-bold">✅ Jupiter Trading</span>
-                <p className="text-gray-300 text-sm">Real swaps & quotes</p>
+                <span className="text-green-400 font-bold">📊 Technical Analysis</span>
+                <p className="text-gray-300 text-sm">Advanced metrics</p>
               </div>
               <div>
-                <span className="text-green-400 font-bold">✅ DexScreener</span>
-                <p className="text-gray-300 text-sm">Live market data</p>
+                <span className="text-green-400 font-bold">🔒 Security Analysis</span>
+                <p className="text-gray-300 text-sm">Honeypot detection</p>
               </div>
               <div>
-                <span className="text-green-400 font-bold">✅ Security Analysis</span>
-                <p className="text-gray-300 text-sm">Risk assessment</p>
+                <span className="text-green-400 font-bold">⚡ Live Trading</span>
+                <p className="text-gray-300 text-sm">Jupiter integration</p>
               </div>
             </div>
           </div>
@@ -848,7 +989,7 @@ function SafeMemeFiApp() {
                 type="text"
                 value={tokenAddress}
                 onChange={(e) => setTokenAddress(e.target.value)}
-                placeholder="Enter ANY Solana token address (PumpFun, Meme coins, DeFi tokens, etc.)"
+                placeholder="Enter Solana token address for advanced analysis..."
                 className="w-full px-6 py-4 bg-gray-900 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition-all"
               />
             </div>
@@ -917,41 +1058,217 @@ function SafeMemeFiApp() {
                             `${(results.marketCap / 1000000).toFixed(2)}M` : 'N/A'
                         }
                       </p>
-                      {results.marketData?.source && (
-                        <p className="text-gray-500 text-xs">via {results.marketData.source}</p>
-                      )}
                     </div>
                     <div className="bg-gray-800/50 rounded-lg p-4">
-                      <p className="text-gray-400 text-sm">Current Price</p>
-                      <p className="text-white text-xl font-bold">
-                        {results.marketData?.price ? 
-                          `${results.marketData.price.toFixed(8)}` :
-                          results.currentPrice > 0 ? 
-                            `${results.currentPrice.toExponential(4)} SOL` : 'N/A'
+                      <p className="text-gray-400 text-sm">24h Change</p>
+                      <p className={`text-xl font-bold ${
+                        (results.marketData?.priceChange24h || 0) >= 0 ? 'text-green-400' : 'text-red-400'
+                      }`}>
+                        {results.marketData?.priceChange24h !== undefined ? 
+                          `${results.marketData.priceChange24h >= 0 ? '+' : ''}${results.marketData.priceChange24h.toFixed(2)}%` : 
+                          'N/A'
                         }
                       </p>
-                      {results.marketData?.priceChange24h !== undefined && (
-                        <p className={`text-sm ${results.marketData.priceChange24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {results.marketData.priceChange24h >= 0 ? '+' : ''}{results.marketData.priceChange24h.toFixed(2)}% (24h)
-                        </p>
-                      )}
                     </div>
                   </div>
                 </div>
                 
                 <div>
-                  <h3 className="text-lg font-semibold text-white mb-4">Status</h3>
-                  <div className="space-y-3">
-                    <div className="flex items-center space-x-3 p-3 bg-green-900/20 rounded-lg border border-green-500/30">
-                      <span className="text-green-400">✅</span>
-                      <span className="text-white">Live Analysis</span>
+                  <h3 className="text-lg font-semibold text-white mb-4">Technical Score</h3>
+                  <div className="text-center">
+                    <div className={`text-5xl font-bold mb-2 ${
+                      results.technicalAnalysis.technicalScore > 75 ? 'text-green-400' :
+                      results.technicalAnalysis.technicalScore > 50 ? 'text-yellow-400' :
+                      results.technicalAnalysis.technicalScore > 25 ? 'text-orange-400' :
+                      'text-red-400'
+                    }`}>
+                      {results.technicalAnalysis.technicalScore}
                     </div>
-                    <div className="flex items-center space-x-3 p-3 bg-blue-900/20 rounded-lg border border-blue-500/30">
-                      <span className="text-blue-400">🔄</span>
-                      <span className="text-white">Jupiter Ready</span>
-                    </div>
+                    <p className="text-gray-300 text-sm">Technical Rating</p>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* Technical Analysis Dashboard */}
+            <div className="bg-black/40 backdrop-blur-lg rounded-2xl border border-purple-500/20 p-8">
+              <h3 className="text-2xl font-bold text-white mb-6">
+                📊 Technical Analysis Dashboard
+              </h3>
+              
+              <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                <div className="bg-gray-800/50 rounded-lg p-4">
+                  <h4 className="text-sm font-semibold text-gray-300 mb-2">Momentum</h4>
+                  <div className="flex items-center space-x-3">
+                    <div className="flex-1">
+                      <div className="w-full bg-gray-700 rounded-full h-2">
+                        <div 
+                          className={`h-2 rounded-full ${
+                            results.technicalAnalysis.momentum > 75 ? 'bg-green-500' :
+                            results.technicalAnalysis.momentum > 50 ? 'bg-yellow-500' :
+                            'bg-red-500'
+                          }`}
+                          style={{ width: `${results.technicalAnalysis.momentum}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                    <span className="text-white font-bold text-sm">
+                      {results.technicalAnalysis.momentum}
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="bg-gray-800/50 rounded-lg p-4">
+                  <h4 className="text-sm font-semibold text-gray-300 mb-2">Liquidity</h4>
+                  <div className="flex items-center space-x-3">
+                    <div className="flex-1">
+                      <div className="w-full bg-gray-700 rounded-full h-2">
+                        <div 
+                          className={`h-2 rounded-full ${
+                            results.technicalAnalysis.liquidity > 75 ? 'bg-green-500' :
+                            results.technicalAnalysis.liquidity > 50 ? 'bg-yellow-500' :
+                            'bg-red-500'
+                          }`}
+                          style={{ width: `${results.technicalAnalysis.liquidity}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                    <span className="text-white font-bold text-sm">
+                      {results.technicalAnalysis.liquidity}
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="bg-gray-800/50 rounded-lg p-4">
+                  <h4 className="text-sm font-semibold text-gray-300 mb-2">Volatility</h4>
+                  <div className="flex items-center space-x-3">
+                    <div className="flex-1">
+                      <div className="w-full bg-gray-700 rounded-full h-2">
+                        <div 
+                          className={`h-2 rounded-full ${
+                            results.technicalAnalysis.volatility > 75 ? 'bg-red-500' :
+                            results.technicalAnalysis.volatility > 50 ? 'bg-yellow-500' :
+                            'bg-green-500'
+                          }`}
+                          style={{ width: `${results.technicalAnalysis.volatility}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                    <span className="text-white font-bold text-sm">
+                      {results.technicalAnalysis.volatility}
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="bg-gray-800/50 rounded-lg p-4">
+                  <h4 className="text-sm font-semibold text-gray-300 mb-2">Market Sentiment</h4>
+                  <div className="flex items-center space-x-3">
+                    <div className="flex-1">
+                      <div className="w-full bg-gray-700 rounded-full h-2">
+                        <div 
+                          className={`h-2 rounded-full ${
+                            results.technicalAnalysis.marketSentiment > 75 ? 'bg-green-500' :
+                            results.technicalAnalysis.marketSentiment > 50 ? 'bg-yellow-500' :
+                            'bg-red-500'
+                          }`}
+                          style={{ width: `${results.technicalAnalysis.marketSentiment}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                    <span className="text-white font-bold text-sm">
+                      {results.technicalAnalysis.marketSentiment}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-gray-800/30 rounded-lg p-4">
+                <h4 className="text-lg font-semibold text-white mb-3">Technical Signals</h4>
+                <div className="grid md:grid-cols-2 gap-3">
+                  {results.technicalAnalysis.signals.map((signal, index) => (
+                    <div key={index} className="flex items-center space-x-2 text-sm">
+                      <span className="text-gray-300">{signal}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Advanced Price Predictions */}
+            <div className="bg-black/40 backdrop-blur-lg rounded-2xl border border-purple-500/20 p-8">
+              <h3 className="text-2xl font-bold text-white mb-6">
+                🤖 AI Price Predictions
+              </h3>
+              
+              <div className="grid lg:grid-cols-3 gap-6">
+                {results.predictions.map((prediction, index) => (
+                  <div key={index} className={`rounded-xl p-6 border ${
+                    prediction.trend === 'bullish' ? 'bg-gradient-to-br from-green-900/30 to-emerald-900/30 border-green-500/30' :
+                    prediction.trend === 'bearish' ? 'bg-gradient-to-br from-red-900/30 to-pink-900/30 border-red-500/30' :
+                    'bg-gradient-to-br from-yellow-900/30 to-orange-900/30 border-yellow-500/30'
+                  }`}>
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <h4 className="text-2xl font-bold text-white">{prediction.timeframe}</h4>
+                        <p className="text-gray-300 text-sm">{prediction.period}</p>
+                      </div>
+                      <div className={`px-3 py-1 rounded-full text-xs font-bold ${
+                        prediction.riskLevel === 'low' ? 'bg-green-500 text-white' :
+                        prediction.riskLevel === 'medium' ? 'bg-yellow-500 text-black' :
+                        'bg-red-500 text-white'
+                      }`}>
+                        {prediction.riskLevel.toUpperCase()}
+                      </div>
+                    </div>
+                    
+                    <div className="text-center mb-4">
+                      <div className={`text-4xl font-bold mb-2 ${
+                        prediction.prediction >= 0 ? 'text-green-400' : 'text-red-400'
+                      }`}>
+                        {prediction.prediction >= 0 ? '+' : ''}{prediction.prediction.toFixed(1)}%
+                      </div>
+                      <p className="text-gray-400 text-sm">
+                        {prediction.confidence}% confidence
+                      </p>
+                    </div>
+                    
+                    <div className="mb-4">
+                      <div className="flex justify-between text-xs text-gray-400 mb-1">
+                        <span>Target: ${prediction.targetPrice.toFixed(8)}</span>
+                        <span>Range: {prediction.probabilityRange.min.toFixed(1)}% - {prediction.probabilityRange.max.toFixed(1)}%</span>
+                      </div>
+                      <div className={`w-full rounded-full h-2 ${
+                        prediction.trend === 'bullish' ? 'bg-green-900' :
+                        prediction.trend === 'bearish' ? 'bg-red-900' :
+                        'bg-yellow-900'
+                      }`}>
+                        <div 
+                          className={`h-2 rounded-full ${
+                            prediction.trend === 'bullish' ? 'bg-green-500' :
+                            prediction.trend === 'bearish' ? 'bg-red-500' :
+                            'bg-yellow-500'
+                          }`}
+                          style={{ width: `${prediction.confidence}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                    
+                    <div className="mb-4">
+                      <p className="text-gray-300 text-sm mb-2">{prediction.reasoning}</p>
+                    </div>
+                    
+                    <div>
+                      <p className="text-gray-400 text-xs mb-2">Key Factors:</p>
+                      <div className="space-y-1">
+                        {prediction.factors.map((factor, idx) => (
+                          <p key={idx} className="text-xs text-gray-300">
+                            • {factor}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -998,208 +1315,91 @@ function SafeMemeFiApp() {
               </div>
             </div>
 
-            {/* Price Chart */}
-            {priceHistory.length > 0 && (
-              <div className="bg-black/40 backdrop-blur-lg rounded-2xl border border-purple-500/20 p-8">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-2xl font-bold text-white flex items-center">
-                    <span className="mr-3">📈</span>
-                    Price Chart
-                  </h3>
-                  
-                  <div className="flex space-x-2">
-                    {['1H', '24H', '7D', '30D'].map((timeframe) => (
-                      <button
-                        key={timeframe}
-                        onClick={() => setChartTimeframe(timeframe)}
-                        className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                          chartTimeframe === timeframe
-                            ? 'bg-purple-600 text-white'
-                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                        }`}
-                      >
-                        {timeframe}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                
-                {loadingChart ? (
-                  <div className="flex items-center justify-center h-96">
-                    <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
-                  </div>
-                ) : (
-                  <div className="h-96">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart data={priceHistory}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                        <XAxis 
-                          dataKey="timestamp"
-                          tickFormatter={(value) => new Date(value).toLocaleDateString()}
-                          stroke="#9CA3AF"
-                        />
-                        <YAxis 
-                          yAxisId="price"
-                          orientation="left"
-                          tickFormatter={(value) => `${value.toExponential(2)}`}
-                          stroke="#9CA3AF"
-                        />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: '#1F2937', 
-                            border: '1px solid #374151',
-                            borderRadius: '8px',
-                            color: '#fff'
-                          }}
-                          labelFormatter={(value) => new Date(value).toLocaleString()}
-                        />
-                        <Area
-                          yAxisId="price"
-                          type="monotone"
-                          dataKey="price"
-                          stroke="#8B5CF6"
-                          fill="url(#priceGradient)"
-                          strokeWidth={2}
-                        />
-                        <defs>
-                          <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.8}/>
-                            <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0.1}/>
-                          </linearGradient>
-                        </defs>
-                      </ComposedChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Predictions */}
-            {predictions.length > 0 && (
-              <div className="bg-black/40 backdrop-blur-lg rounded-2xl border border-purple-500/20 p-8">
-                <h3 className="text-2xl font-bold text-white mb-6">
-                  📊 Price Predictions
-                </h3>
-                
-                <div className="grid md:grid-cols-3 gap-6">
-                  {predictions.map((prediction, index) => (
-                    <div key={index} className={`p-6 rounded-xl border-l-4 ${
-                      prediction.trend === 'bullish' ? 'bg-green-900/20 border-green-500' :
-                      prediction.trend === 'bearish' ? 'bg-red-900/20 border-red-500' :
-                      'bg-yellow-900/20 border-yellow-500'
-                    }`}>
-                      <div className="flex justify-between items-start mb-4">
-                        <div>
-                          <h4 className="text-xl font-bold text-white">{prediction.timeframe}</h4>
-                        </div>
-                        <div className="text-right">
-                          <p className={`text-2xl font-bold ${
-                            prediction.prediction >= 0 ? 'text-green-400' : 'text-red-400'
-                          }`}>
-                            {prediction.prediction >= 0 ? '+' : ''}{prediction.prediction.toFixed(1)}%
-                          </p>
-                          <p className="text-gray-400 text-sm">
-                            {prediction.confidence}% confidence
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div className="mb-4">
-                        <div className={`w-full rounded-full h-2 ${
-                          prediction.trend === 'bullish' ? 'bg-green-900' :
-                          prediction.trend === 'bearish' ? 'bg-red-900' :
-                          'bg-yellow-900'
-                        }`}>
-                          <div 
-                            className={`h-2 rounded-full ${
-                              prediction.trend === 'bullish' ? 'bg-green-500' :
-                              prediction.trend === 'bearish' ? 'bg-red-500' :
-                              'bg-yellow-500'
-                            }`}
-                            style={{ width: `${prediction.confidence}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                      
-                      <div>
-                        <p className="text-gray-400 text-sm mb-2">Factors:</p>
-                        <div className="space-y-1">
-                          {prediction.factors.map((factor, idx) => (
-                            <p key={idx} className="text-xs text-gray-300">
-                              • {factor}
-                            </p>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Risk Assessment */}
+                        {/* Risk Assessment */}
             <div className="bg-black/40 backdrop-blur-lg rounded-2xl border border-purple-500/20 p-8">
               <h3 className="text-2xl font-bold text-white mb-6">
                 🔒 Risk Assessment
               </h3>
-              
-              <div className={`p-6 rounded-xl border-2 ${
-                results.riskScore > 70 ? 'bg-red-900/30 border-red-500' :
-                results.riskScore > 50 ? 'bg-orange-900/30 border-orange-500' :
-                results.riskScore > 30 ? 'bg-yellow-900/30 border-yellow-500' :
-                'bg-green-900/30 border-green-500'
-              }`}>
+              <div
+                className={`p-6 rounded-xl border-2 ${
+                  results.riskScore > 70
+                    ? 'bg-red-900/30 border-red-500'
+                    : results.riskScore > 50
+                    ? 'bg-orange-900/30 border-orange-500'
+                    : results.riskScore > 30
+                    ? 'bg-yellow-900/30 border-yellow-500'
+                    : 'bg-green-900/30 border-green-500'
+                }`}
+              >
                 <div className="flex items-center justify-between mb-4">
-                  <span className={`text-3xl font-bold ${
-                    results.riskScore > 70 ? 'text-red-300' :
-                    results.riskScore > 50 ? 'text-orange-300' :
-                    results.riskScore > 30 ? 'text-yellow-300' :
-                    'text-green-300'
-                  }`}>
+                  <span
+                    className={`text-3xl font-bold ${
+                      results.riskScore > 70
+                        ? 'text-red-300'
+                        : results.riskScore > 50
+                        ? 'text-orange-300'
+                        : results.riskScore > 30
+                        ? 'text-yellow-300'
+                        : 'text-green-300'
+                    }`}
+                  >
                     {results.riskLevel} Risk
                   </span>
-                  <span className={`text-2xl font-bold ${
-                    results.riskScore > 70 ? 'text-red-300' :
-                    results.riskScore > 50 ? 'text-orange-300' :
-                    results.riskScore > 30 ? 'text-yellow-300' :
-                    'text-green-300'
-                  }`}>
+                  <span
+                    className={`text-2xl font-bold ${
+                      results.riskScore > 70
+                        ? 'text-red-300'
+                        : results.riskScore > 50
+                        ? 'text-orange-300'
+                        : results.riskScore > 30
+                        ? 'text-yellow-300'
+                        : 'text-green-300'
+                    }`}
+                  >
                     {results.riskScore}/100
                   </span>
                 </div>
-                
                 <div className="w-full bg-gray-700 rounded-full h-6 mb-4">
-                  <div 
+                  <div
                     className={`h-6 rounded-full transition-all duration-2000 ${
-                      results.riskScore > 70 ? 'bg-red-500' :
-                      results.riskScore > 50 ? 'bg-orange-500' :
-                      results.riskScore > 30 ? 'bg-yellow-500' :
-                      'bg-green-500'
+                      results.riskScore > 70
+                        ? 'bg-red-500'
+                        : results.riskScore > 50
+                        ? 'bg-orange-500'
+                        : results.riskScore > 30
+                        ? 'bg-yellow-500'
+                        : 'bg-green-500'
                     }`}
                     style={{ width: `${Math.min(results.riskScore, 100)}%` }}
                   ></div>
                 </div>
-                
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {results.riskFactors.map((factor, index) => (
-                    <div key={index} className={`p-4 rounded-lg ${
-                      factor.status === 'safe' ? 'bg-green-900/20' :
-                      factor.status === 'warning' ? 'bg-yellow-900/20' :
-                      'bg-red-900/20'
-                    }`}>
+                    <div
+                      key={index}
+                      className={`p-4 rounded-lg ${
+                        factor.status === 'safe'
+                          ? 'bg-green-900/20'
+                          : factor.status === 'warning'
+                          ? 'bg-yellow-900/20'
+                          : 'bg-red-900/20'
+                      }`}
+                    >
                       <div className="flex justify-between items-start mb-2">
                         <h4 className="text-sm font-semibold text-white">{factor.name}</h4>
-                        <span className={`px-2 py-1 rounded text-xs font-bold ${
-                          factor.status === 'safe' ? 'bg-green-500 text-white' :
-                          factor.status === 'warning' ? 'bg-yellow-500 text-black' :
-                          'bg-red-500 text-white'
-                        }`}>
+                        <span
+                          className={`px-2 py-1 rounded text-xs font-bold ${
+                            factor.status === 'safe'
+                              ? 'bg-green-500 text-white'
+                              : factor.status === 'warning'
+                              ? 'bg-yellow-500 text-black'
+                              : 'bg-red-500 text-white'
+                          }`}
+                        >
                           {factor.score}
                         </span>
                       </div>
-                      <p className="text-xs text-gray-300">
-                        {factor.description}
-                      </p>
+                      <p className="text-xs text-gray-300">{factor.description}</p>
                     </div>
                   ))}
                 </div>
@@ -1209,10 +1409,7 @@ function SafeMemeFiApp() {
             {/* Token Holders */}
             {results.holders.length > 0 && (
               <div className="bg-black/40 backdrop-blur-lg rounded-2xl border border-purple-500/20 p-8">
-                <h3 className="text-2xl font-bold text-white mb-6">
-                  🐋 Token Holders
-                </h3>
-                
+                <h3 className="text-2xl font-bold text-white mb-6">🐋 Token Holders</h3>
                 <div className="grid lg:grid-cols-2 gap-8">
                   <div>
                     <div className="space-y-3">
@@ -1226,19 +1423,14 @@ function SafeMemeFiApp() {
                               </p>
                             </div>
                             <div className="text-right">
-                              <p className="font-semibold text-blue-400">
-                                {holder.percentage.toFixed(2)}%
-                              </p>
-                              <p className="text-gray-400 text-sm">
-                                {holder.amount.toLocaleString()} tokens
-                              </p>
+                              <p className="font-semibold text-blue-400">{holder.percentage.toFixed(2)}%</p>
+                              <p className="text-gray-400 text-sm">{holder.amount.toLocaleString()} tokens</p>
                             </div>
                           </div>
                         </div>
                       ))}
                     </div>
                   </div>
-
                   <div>
                     <h4 className="text-lg font-semibold text-white mb-4">Distribution</h4>
                     <div className="h-64">
@@ -1247,7 +1439,7 @@ function SafeMemeFiApp() {
                           <Pie
                             data={results.holders.slice(0, 5).map((holder, index) => ({
                               name: `Holder ${index + 1}`,
-                              value: holder.percentage
+                              value: holder.percentage,
                             }))}
                             cx="50%"
                             cy="50%"
@@ -1270,18 +1462,17 @@ function SafeMemeFiApp() {
 
             {/* Security Tests */}
             <div className="bg-black/40 backdrop-blur-lg rounded-2xl border border-purple-500/20 p-8">
-              <h3 className="text-2xl font-bold text-white mb-6">
-                🕵️ Security Tests
-              </h3>
-              
+              <h3 className="text-2xl font-bold text-white mb-6">🕵️ Security Tests</h3>
               <div className="grid gap-3">
                 {results.honeypotResult.details.map((detail, index) => (
-                  <div 
-                    key={index} 
+                  <div
+                    key={index}
                     className={`p-4 rounded-lg border ${
-                      detail.startsWith('✅') || detail.startsWith('🎉') ? 'bg-green-900/20 border-green-500/30 text-green-200' : 
-                      detail.startsWith('⚠️') ? 'bg-yellow-900/20 border-yellow-500/30 text-yellow-200' : 
-                      'bg-red-900/20 border-red-500/30 text-red-200'
+                      detail.startsWith('✅') || detail.startsWith('🎉')
+                        ? 'bg-green-900/20 border-green-500/30 text-green-200'
+                        : detail.startsWith('⚠️')
+                        ? 'bg-yellow-900/20 border-yellow-500/30 text-yellow-200'
+                        : 'bg-red-900/20 border-red-500/30 text-red-200'
                     }`}
                   >
                     {detail}
@@ -1296,10 +1487,10 @@ function SafeMemeFiApp() {
   );
 }
 
-export default function App() {
-  return (
-    <WalletContextProvider>
-      <SafeMemeFiApp />
-    </WalletContextProvider>
-  );
-}
+const App = () => (
+  <WalletContextProvider>
+    <SafeMemeFiApp />
+  </WalletContextProvider>
+);
+
+export default App;
