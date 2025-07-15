@@ -1,3 +1,4 @@
+import { postTweet, TweetResponse } from './services/tweetService.ts';
 import React, { useState, useEffect } from 'react';
 import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
 import { ConnectionProvider, WalletProvider, useWallet } from '@solana/wallet-adapter-react';
@@ -113,7 +114,7 @@ interface AnalysisResults {
 }
 
 // Wallet Context Provider
-function WalletContextProvider({ children }: { children: React.ReactNode }) {
+function WalletContextProvider({ children }: { children: any }) {
   const network = WalletAdapterNetwork.Mainnet;
   const endpoint = `https://rpc.helius.xyz/?api-key=${HELIUS_API_KEY}`;
   
@@ -136,11 +137,11 @@ function WalletContextProvider({ children }: { children: React.ReactNode }) {
 // Main SafeMemeFi Component
 function SafeMemeFiApp() {
   const { publicKey, connected, sendTransaction } = useWallet();
-  const [tokenAddress, setTokenAddress] = useState<string>('');
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [results, setResults] = useState<AnalysisResults | null>(null);
-  const [userTokenBalance, setUserTokenBalance] = useState<number>(0);
+  const [tokenAddress, setTokenAddress] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [results, setResults] = useState();
+  const [userTokenBalance, setUserTokenBalance] = useState(0);
 
   // Helius RPC Connection
   const connection = new Connection(`https://rpc.helius.xyz/?api-key=${HELIUS_API_KEY}`, 'confirmed');
@@ -715,8 +716,8 @@ function SafeMemeFiApp() {
     }
 
     setLoading(true);
-    setError(null);
-    setResults(null);
+    setError('')
+    setResults(undefined)
 
     try {
       const mintPublicKey = new PublicKey(tokenAddress);
@@ -796,7 +797,39 @@ function SafeMemeFiApp() {
       const predictions = generateAdvancedPredictions(analysisResults, technicalAnalysis);
       analysisResults.predictions = predictions;
 
-      setResults(analysisResults);
+// 12. Tweet sonuçları
+const formatVolume = (num: number): string => {
+  if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+  if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+  return num?.toString() || 'N/A';
+};
+
+const formatMarketCap = (num: number): string => {
+  return num?.toLocaleString() || 'N/A';
+};
+
+const tweetText = `${analysisResults.tokenMetadata?.symbol || 'TOKEN'}
+24h Change: ${analysisResults.marketData?.priceChange24h?.toFixed(2) || 'N/A'}%
+**Technical Score: ${analysisResults.technicalAnalysis.technicalScore || 'N/A'}/100**
+Market Cap: $${formatMarketCap(analysisResults.marketCap)}
+**Token Distribution: ${analysisResults.holders.length || 'N/A'} holders**
+24H Volume: $${formatVolume(analysisResults.marketData?.volume24h || 0)}
+**Risk Score: ${analysisResults.riskScore || 'N/A'}/100**
+
+AI-powered token risk scanner 
+Detect rugs, honeypots & pump scams
+https://safememefi-analyzer.vercel.app/`;
+
+console.log('Tweet length:', tweetText.length);
+
+const tweetResult = await postTweet(tweetText);
+if (tweetResult.success) {
+  console.log('✅ Tweet posted successfully:', tweetResult.tweetUrl);
+} else {
+  console.error('❌ Tweet failed:', tweetResult.error);
+}
+
+setResults(analysisResults);
 
     } catch (e) {
       console.error('Analysis error:', e);
@@ -1445,7 +1478,7 @@ function SafeMemeFiApp() {
                             cy="50%"
                             outerRadius={80}
                             dataKey="value"
-                            label={({ value }) => `${value.toFixed(1)}%`}
+                            label={({ value }) => `${value?.toFixed(1)}%`}
                           >
                             {results.holders.slice(0, 5).map((entry, index) => (
                               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
