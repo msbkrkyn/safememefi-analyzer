@@ -140,7 +140,7 @@ function SafeMemeFiApp() {
   const [tokenAddress, setTokenAddress] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [results, setResults] = useState();
+  const [results, setResults] = useState<AnalysisResults | undefined>(undefined);
   const [userTokenBalance, setUserTokenBalance] = useState(0);
 
   // Helius RPC Connection
