@@ -577,109 +577,37 @@ function SafeMemeFiApp() {
     return honeypotResult;
   };
 
-  // Risk Calculation
-  const calculateRealRisk = (basicInfo: BasicInfo, holders: TokenHolder[], honeypotResult: HoneypotResult, marketData: MarketData | null): { score: number; factors: SecurityDetail[] } => {
-    const factors: SecurityDetail[] = [];
-    let totalScore = 0;
-
-    // Mint Authority Check
-    if (basicInfo.mintAuthority !== 'Revoked') {
-      totalScore += 30;
-      factors.push({
-        name: 'Mint Authority',
-        score: 30,
-        status: 'danger',
-        description: 'Mint authority active - New tokens can be created',
-        category: 'security'
-      });
-    } else {
-      factors.push({
-        name: 'Mint Authority',
-        score: 0,
-        status: 'safe',
-        description: 'Mint authority revoked - Supply is fixed',
-        category: 'security'
-      });
-    }
-
-    // Freeze Authority Check
-    if (basicInfo.freezeAuthority !== 'Revoked') {
-      totalScore += 20;
-      factors.push({
-        name: 'Freeze Authority',
-        score: 20,
-        status: 'warning',
-        description: 'Freeze authority active - Accounts can be frozen',
-        category: 'security'
-      });
-    } else {
-      factors.push({
-        name: 'Freeze Authority',
-        score: 0,
-        status: 'safe',
-        description: 'Freeze authority revoked - Safe',
-        category: 'security'
-      });
-    }
-
-    // Holder Concentration
-    if (holders.length > 0) {
-      const topHolderPercent = holders[0].percentage;
-      let holderScore = 0;
-      let holderStatus: 'safe' | 'warning' | 'danger' = 'safe';
-      let holderDesc = '';
-
-      if (topHolderPercent > 50) {
-        holderScore = 40;
-        holderStatus = 'danger';
-        holderDesc = `Top holder owns ${topHolderPercent.toFixed(1)}% - Extreme risk`;
-      } else if (topHolderPercent > 30) {
-        holderScore = 25;
-        holderStatus = 'danger';
-        holderDesc = `Top holder owns ${topHolderPercent.toFixed(1)}% - High risk`;
-      } else if (topHolderPercent > 10) {
-        holderScore = 10;
-        holderStatus = 'warning';
-        holderDesc = `Top holder owns ${topHolderPercent.toFixed(1)}% - Some risk`;
-      } else {
-        holderDesc = `Well distributed - Top holder: ${topHolderPercent.toFixed(1)}%`;
-      }
-
-      totalScore += holderScore;
-      factors.push({
-        name: 'Token Distribution',
-        score: holderScore,
-        status: holderStatus,
-        description: holderDesc,
-        category: 'whale'
-      });
-    }
-
-    // Honeypot Check
-    if (honeypotResult.isHoneypot) {
-      totalScore += 50;
-      factors.push({
-        name: 'Honeypot Check',
-        score: 50,
-        status: 'danger',
-        description: 'Failed security tests - High risk',
-        category: 'security'
-      });
-    } else {
-      factors.push({
-        name: 'Honeypot Check',
-        score: 0,
-        status: 'safe',
-        description: 'Passed all security tests',
-        category: 'security'
-      });
-    }
-
-    return {
-      score: Math.min(totalScore, 100),
-      factors
-    };
-  };
+const calculateRiskScore = (riskFactors, marketData) => {
+  let riskScore = 30; // Base risk (daha yüksek başlangıç)
+  
+  // *** YENİ: Price change riski (EN ÖNEMLİ) ***
+  const priceChange24h = marketData?.priceChange24h || 0;
+  if (priceChange24h < -30) riskScore += 40; // %30'dan fazla düşüş = +40 risk
+  else if (priceChange24h < -20) riskScore += 30; // %20-30 düşüş = +30 risk
+  else if (priceChange24h < -10) riskScore += 20; // %10-20 düşüş = +20 risk
+  else if (priceChange24h < -5) riskScore += 10; // %5-10 düşüş = +10 risk
+  else if (priceChange24h > 100) riskScore += 25; // %100'den fazla artış = pump risk
+  
+  // Holder count riski
+  if (riskFactors?.holderCount < 100) riskScore += 20;
+  else if (riskFactors?.holderCount < 500) riskScore += 10;
+  else if (riskFactors?.holderCount > 1000) riskScore -= 5;
+  
+  // Market cap riski
+  if (marketData?.marketCap < 50000) riskScore += 25; // Çok küçük market cap
+  else if (marketData?.marketCap < 100000) riskScore += 15;
+  else if (marketData?.marketCap > 10000000) riskScore -= 10; // Büyük market cap güvenli
+  
+  // Volume riski
+  if (marketData?.volume24h < 1000) riskScore += 20; // Çok düşük volume
+  else if (marketData?.volume24h < 10000) riskScore += 10;
+  
+  // Top holder riski
+  if (riskFactors?.topHolderPercentage > 50) riskScore += 20;
+  else if (riskFactors?.topHolderPercentage > 30) riskScore += 10;
+  
+  return Math.max(0, Math.min(100, riskScore));
+};
 
   // Get User Token Balance
   const getUserBalance = async (mintPublicKey: PublicKey): Promise<number> => {
@@ -748,8 +676,28 @@ function SafeMemeFiApp() {
       const balance = await getUserBalance(mintPublicKey);
       setUserTokenBalance(balance);
 
-      // 7. Risk Assessment
-      const { score: riskScore, factors: riskFactors } = calculateRealRisk(basicInfo, holders, honeypotResult, marketData);
+      // 7. Risk Assessment - Backend'den al
+let riskScore = 50;
+let riskFactors = [];
+
+try {
+  const backendResponse = await fetch('http://localhost:3001/api/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tokenAddress })
+  });
+  
+  if (backendResponse.ok) {
+    const backendAnalysis = await backendResponse.json();
+    riskScore = backendAnalysis.riskScore || 50;
+    riskFactors = backendAnalysis.riskFactors || [];
+    console.log('✅ Backend risk analysis received:', riskScore);
+  } else {
+    console.log('❌ Backend analysis failed, using local calculation');
+  }
+} catch (e) {
+  console.log('❌ Backend connection failed, using local calculation');
+}
 
       let riskLevel = 'Low';
       if (riskScore > 70) riskLevel = 'Critical';
