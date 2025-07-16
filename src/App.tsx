@@ -968,14 +968,26 @@ setResults(analysisResults);
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              {connected && publicKey && (
-                <div className="text-white text-sm">
-                  <p>Wallet: {publicKey.toBase58().slice(0,4)}...{publicKey.toBase58().slice(-4)}</p>
-                  {userTokenBalance > 0 && (
-                    <p>Balance: {userTokenBalance.toFixed(6)} tokens</p>
-                  )}
-                </div>
-              )}
+              <a 
+                href="https://x.com/PumpfunRisk" 
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-white font-medium transition-colors flex items-center space-x-2"
+              >
+                <span>🐦</span>
+                <span>Follow X</span>
+              </a>
+              
+              <a 
+                href="https://t.me/PumpfunRisk_bot" 
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-lg text-white font-medium transition-colors flex items-center space-x-2"
+              >
+                <span>🤖</span>
+                <span>Telegram Bot</span>
+              </a>
+              
               <WalletMultiButton />
             </div>
           </div>
